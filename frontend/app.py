@@ -85,6 +85,8 @@ for key, default in [
     ("me", None),                 # /auth/me result (or None if logged out)
     ("profile", None),
     ("matches", None),
+    ("match_mode", "general"),    # "general" | "gsoc"
+    ("matches_for_mode", None),   # mode the cached matches were fetched in
     ("selected_issue", None),
     ("investigation_id", None),
     ("investigation_for_issue_id", None),
@@ -340,6 +342,34 @@ if st.button("Re-profile (refresh)"):
 st.divider()
 st.header("Issues that match")
 
+# Mode picker — defines the scope of repos we consider. GSoC mode restricts
+# to orgs that have shipped GSoC projects in the last 3 years; General mode
+# searches across all of GitHub.
+MODE_LABELS = {"general": "🌐 General", "gsoc": "🎓 GSoC"}
+mode_label = st.radio(
+    "Search scope",
+    options=list(MODE_LABELS.values()),
+    index=0 if st.session_state.match_mode == "general" else 1,
+    horizontal=True,
+    label_visibility="collapsed",
+    key="match_mode_picker",
+)
+new_mode = "general" if mode_label == MODE_LABELS["general"] else "gsoc"
+
+# Flipping mode invalidates cached matches so the user notices the
+# scope changed without a stale list lingering.
+if new_mode != st.session_state.match_mode:
+    st.session_state.match_mode = new_mode
+    if st.session_state.matches_for_mode != new_mode:
+        st.session_state.matches = None
+        st.session_state.selected_issue = None
+
+if st.session_state.match_mode == "gsoc":
+    st.caption(
+        "Filtered to organizations that have shipped Google Summer of Code "
+        "projects in the last 3 years."
+    )
+
 mcol1, mcol2, mcol3 = st.columns([2, 2, 1])
 top = mcol1.slider("How many", 5, 30, 10)
 difficulty = mcol2.selectbox("Difficulty", ["any", "easy", "medium", "hard"], index=0)
@@ -350,7 +380,9 @@ if st.button("Find matches"):
         try:
             st.session_state.matches = client.get_my_matches(
                 top=top, difficulty=difficulty, explain=explain,
+                mode=st.session_state.match_mode,
             )
+            st.session_state.matches_for_mode = st.session_state.match_mode
             st.session_state.selected_issue = None
             st.session_state.investigation_id = None
             st.session_state.pitch = None
@@ -361,7 +393,16 @@ if st.button("Find matches"):
 if st.session_state.matches is not None:
     matches = st.session_state.matches
     if not matches:
-        st.info("No matches yet. Run the Issue Hunter to populate the candidate pool.")
+        if st.session_state.match_mode == "gsoc":
+            st.info(
+                "No GSoC matches yet. The candidate pool may not include any "
+                "issues from GSoC-listed orgs. Run the Issue Hunter in GSoC mode "
+                "(`uv run python -m app.workers hunt --mode gsoc`) to populate it."
+            )
+        else:
+            st.info(
+                "No matches yet. Run the Issue Hunter to populate the candidate pool."
+            )
     for i, m in enumerate(matches):
         with st.container(border=True):
             row1, row2 = st.columns([5, 1])

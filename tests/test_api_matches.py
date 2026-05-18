@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.db.models import Issue, Repo, UserSkill
+from app.db.models import GsocOrg, Issue, Repo, UserSkill
 from app.db.session import VEC_DIM
 from app.db.vector import insert_vector
 
@@ -124,6 +124,121 @@ def test_matches_caps_top_param(client, api_app, make_logged_in_user):
     api_app.state.voyage = _fake_voyage()
     response = client.get("/users/me/matches?top=999")
     assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Mode (Batch 20) — general vs gsoc
+# ---------------------------------------------------------------------------
+
+def _seed_gsoc_orgs(session, logins, *, year: int = 2025) -> None:
+    for slug_login in logins:
+        session.add(GsocOrg(
+            slug=slug_login, name=slug_login.title(),
+            github_login=slug_login,
+            primary_languages=["Python"], topics=[],
+            years_participated=[year], last_seen_year=year,
+        ))
+    session.commit()
+
+
+def _seed_issues_for_owners(session, owners: list[str], *, base_id: int = 200) -> None:
+    """Seed one repo + one issue + one vector per owner."""
+    for i, owner in enumerate(owners):
+        full = f"{owner}/proj{i}"
+        repo = Repo(
+            id=base_id + i, full_name=full, name=f"proj{i}",
+            html_url=f"https://github.com/{full}",
+            language="Python", stargazers_count=500,
+            forks_count=10, open_issues_count=2,
+            pushed_at=NOW - timedelta(days=1),
+            health_score=0.8,
+        )
+        session.add(repo)
+        session.flush()
+        issue = Issue(
+            id=base_id + 1000 + i, repo_id=repo.id, number=i + 1,
+            title=f"{owner} issue", body="x",
+            state="open", labels=["help wanted"],
+            html_url=f"https://github.com/{full}/issues/{i+1}",
+            issue_created_at=NOW - timedelta(days=2),
+            issue_updated_at=NOW - timedelta(days=1),
+            difficulty="easy",
+        )
+        session.add(issue)
+        session.flush()
+        emb = [0.1] * VEC_DIM
+        emb[0] = 0.1 + i * 0.01
+        insert_vector(session, "issues_vec", issue.id, emb)
+    session.commit()
+
+
+@pytest.mark.unit
+def test_matches_rejects_invalid_mode(client, api_app, make_logged_in_user):
+    make_logged_in_user()
+    api_app.state.voyage = _fake_voyage()
+    response = client.get("/users/me/matches?mode=invalid")
+    assert response.status_code == 422
+
+
+@pytest.mark.unit
+def test_matches_gsoc_mode_filters_to_listed_orgs(
+    client, api_app, session, make_logged_in_user,
+):
+    user = make_logged_in_user(github_login="g", github_id=77)
+    session.add(UserSkill(
+        user_id=user.id, languages=["Python"], frameworks=[], domains=[],
+        experience_signal="mid", summary="Python dev.",
+    ))
+    session.commit()
+    # Issues from one GSoC org + one non-GSoC org
+    _seed_issues_for_owners(session, ["apache", "randostartup"])
+    _seed_gsoc_orgs(session, ["apache"])
+    api_app.state.voyage = _fake_voyage()
+
+    response = client.get("/users/me/matches?top=10&explain=false&mode=gsoc")
+    assert response.status_code == 200
+    body = response.json()
+    repos = {m["repo_full_name"] for m in body["matches"]}
+    assert repos == {"apache/proj0"}
+
+
+@pytest.mark.unit
+def test_matches_general_mode_includes_all_orgs(
+    client, api_app, session, make_logged_in_user,
+):
+    user = make_logged_in_user(github_login="g", github_id=77)
+    session.add(UserSkill(
+        user_id=user.id, languages=["Python"], frameworks=[], domains=[],
+        experience_signal="mid", summary="Python dev.",
+    ))
+    session.commit()
+    _seed_issues_for_owners(session, ["apache", "randostartup"])
+    _seed_gsoc_orgs(session, ["apache"])
+    api_app.state.voyage = _fake_voyage()
+
+    response = client.get("/users/me/matches?top=10&explain=false&mode=general")
+    assert response.status_code == 200
+    repos = {m["repo_full_name"] for m in response.json()["matches"]}
+    assert repos == {"apache/proj0", "randostartup/proj1"}
+
+
+@pytest.mark.unit
+def test_matches_gsoc_mode_returns_empty_when_no_orgs_seeded(
+    client, api_app, session, make_logged_in_user,
+):
+    user = make_logged_in_user(github_login="g", github_id=77)
+    session.add(UserSkill(
+        user_id=user.id, languages=["Python"], frameworks=[], domains=[],
+        experience_signal="mid", summary="Python dev.",
+    ))
+    session.commit()
+    _seed_issues_for_owners(session, ["apache"])  # issues exist
+    # but gsoc_orgs is empty
+    api_app.state.voyage = _fake_voyage()
+
+    response = client.get("/users/me/matches?explain=false&mode=gsoc")
+    assert response.status_code == 200
+    assert response.json()["count"] == 0
 
 
 # ---------------------------------------------------------------------------

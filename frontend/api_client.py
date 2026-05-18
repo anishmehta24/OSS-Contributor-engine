@@ -114,10 +114,16 @@ class ApiClient:
         top: int = 10,
         difficulty: str = "any",
         explain: bool = True,
+        mode: str = "general",
     ) -> list[dict[str, Any]]:
         r = self._client.get(
             "/users/me/matches",
-            params={"top": top, "difficulty": difficulty, "explain": str(explain).lower()},
+            params={
+                "top": top,
+                "difficulty": difficulty,
+                "explain": str(explain).lower(),
+                "mode": mode,
+            },
         )
         _raise(r)
         return r.json()["matches"]

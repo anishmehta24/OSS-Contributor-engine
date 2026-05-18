@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.agents.hunter.schemas import HuntStats
+from app.agents.hunter.schemas import HuntMode, HuntStats
 from app.agents.profiles.schemas import SkillProfile
 from app.agents.triager.schemas import RankedMatch
 
@@ -76,6 +76,7 @@ class RankedMatchesResponse(BaseModel):
 
 class HuntRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    mode: HuntMode = "general"
     languages: list[str] | None = None
     max_total_issues: int = Field(default=50, ge=1, le=500)
     enable_difficulty_llm: bool = True

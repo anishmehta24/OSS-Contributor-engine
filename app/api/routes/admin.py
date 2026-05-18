@@ -47,11 +47,17 @@ async def trigger_hunt(
     Note: this can take 1-5 minutes depending on `max_total_issues`. Batch 9
     wraps this in a background job so the HTTP request doesn't block.
     """
-    config = HunterConfig(
+    kwargs: dict = dict(
+        mode=body.mode,
         max_total_issues=body.max_total_issues,
         enable_difficulty_llm=body.enable_difficulty_llm,
         enable_embeddings=body.enable_embeddings,
     )
+    # GSoC mode loosens defaults — smaller orgs, longer-lived issues.
+    if body.mode == "gsoc":
+        kwargs.setdefault("min_stars", 10)
+        kwargs.setdefault("updated_since_days", 60)
+    config = HunterConfig(**kwargs)
     if body.languages:
         config = config.model_copy(update={"languages": body.languages})
 

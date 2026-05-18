@@ -63,3 +63,39 @@ def build_queries(
             )
             queries.append(q)
     return queries
+
+
+def build_gsoc_queries(
+    org_logins: Iterable[str],
+    labels: Iterable[str] = BEGINNER_LABELS,
+    *,
+    updated_since_days: int = 60,
+    min_stars: int = 10,
+) -> list[str]:
+    """Build GitHub-search queries scoped to specific org owners (GSoC mode).
+
+    One query per (org, label). No language qualifier — orgs are assumed
+    pre-filtered against the user's languages by the caller. Defaults are
+    looser than general mode because GSoC orgs include smaller research
+    projects (lower stars) and issues often stay open longer waiting for
+    student contributors (wider recency window).
+
+    Example output:
+        'is:issue is:open label:"good first issue" user:apache
+         stars:>10 updated:>=2025-03-19'
+    """
+    cutoff = _iso_date(datetime.utcnow() - timedelta(days=updated_since_days))
+    queries: list[str] = []
+    for login in org_logins:
+        if not login:
+            continue
+        for label in labels:
+            q = (
+                f'is:issue is:open '
+                f'label:"{label}" '
+                f'user:{login} '
+                f'stars:>{min_stars} '
+                f'updated:>={cutoff}'
+            )
+            queries.append(q)
+    return queries

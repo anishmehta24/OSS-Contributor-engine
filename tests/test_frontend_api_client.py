@@ -89,6 +89,18 @@ def test_get_my_matches_passes_query_params(client):
     assert qs["top"] == "5"
     assert qs["difficulty"] == "easy"
     assert qs["explain"] == "false"
+    # Default mode is general
+    assert qs["mode"] == "general"
+
+
+@pytest.mark.unit
+@respx.mock
+def test_get_my_matches_sends_gsoc_mode(client):
+    route = respx.get(f"{BASE}/users/me/matches").mock(return_value=httpx.Response(
+        200, json={"github_login": "me", "count": 0, "matches": []},
+    ))
+    client.get_my_matches(mode="gsoc")
+    assert dict(route.calls[0].request.url.params)["mode"] == "gsoc"
 
 
 @pytest.mark.unit

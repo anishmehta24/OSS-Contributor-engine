@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.agents.hunter.schemas import HuntMode
 from app.agents.triager.schemas import RankedMatch, RankingWeights
 from app.agents.triager.scoring import (
     DifficultyPref,
@@ -32,11 +33,13 @@ from app.agents.triager.scoring import (
 )
 from app.db.models import Issue, Repo, User, UserSkill
 from app.db.vector import insert_vector, search_similar
+from app.gsoc.queries import list_active_orgs
 from app.llm import call_llm
 
 log = structlog.get_logger(__name__)
 
-CANDIDATE_POOL_SIZE = 50   # how many to pull from vec0 before ranking
+CANDIDATE_POOL_SIZE = 50            # general mode: how many to pull from vec0
+CANDIDATE_POOL_SIZE_GSOC = 250      # gsoc mode: wider pool to survive owner filter
 TOP_N_DEFAULT = 10
 
 
@@ -163,12 +166,23 @@ async def rank_for_user(
     weights: RankingWeights | None = None,
     difficulty_pref: DifficultyPref = "any",
     top_n: int = TOP_N_DEFAULT,
-    candidate_pool: int = CANDIDATE_POOL_SIZE,
+    candidate_pool: int | None = None,
     explain: bool = True,
+    mode: HuntMode = "general",
+    gsoc_recent_years: int = 3,
 ) -> list[RankedMatch]:
     """Return top-N ranked matches for `github_login`. Requires the user to
-    have been profiled first."""
+    have been profiled first.
+
+    In `mode="gsoc"` the candidate pool is widened and filtered so only
+    issues from repos whose owner is listed in `gsoc_orgs` survive.
+    """
     weights = weights or RankingWeights()
+
+    if candidate_pool is None:
+        candidate_pool = (
+            CANDIDATE_POOL_SIZE_GSOC if mode == "gsoc" else CANDIDATE_POOL_SIZE
+        )
 
     user = session.execute(
         select(User).where(User.github_login == github_login)
@@ -179,6 +193,19 @@ async def rank_for_user(
         )
 
     user_embedding = await ensure_user_skill_embedding(session, embedder, user.skill)
+
+    # GSoC-mode owner allowlist — empty set means "no GSoC orgs known", in
+    # which case we return zero matches (better than silently returning
+    # general-mode results when the user asked for GSoC).
+    gsoc_owner_logins: set[str] | None = None
+    if mode == "gsoc":
+        orgs = list_active_orgs(session, recent_years=gsoc_recent_years)
+        gsoc_owner_logins = {
+            (o.github_login or "").lower() for o in orgs if o.github_login
+        }
+        log.info("rank_gsoc_filter", owners=len(gsoc_owner_logins))
+        if not gsoc_owner_logins:
+            return []
 
     hits = search_similar(session, "issues_vec", user_embedding, k=candidate_pool)
     if not hits:
@@ -204,6 +231,10 @@ async def rank_for_user(
         repo = repos_by_id.get(issue.repo_id)
         if repo is None:
             continue
+        if gsoc_owner_logins is not None:
+            owner = repo.full_name.split("/", 1)[0].lower() if repo.full_name else ""
+            if owner not in gsoc_owner_logins:
+                continue
 
         skill = distance_to_similarity(hit.distance)
         repo_h = repo.health_score or 0.0

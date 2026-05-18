@@ -1,8 +1,10 @@
 """Workers CLI.
 
 Usage:
-    uv run python -m app.workers hunt                       # default config
+    uv run python -m app.workers hunt                                   # general mode
     uv run python -m app.workers hunt --languages python,go --max 50
+    uv run python -m app.workers hunt --mode gsoc                       # GSoC orgs only
+    uv run python -m app.workers hunt --mode gsoc --languages python    # GSoC + lang filter
 """
 from __future__ import annotations
 
@@ -35,10 +37,32 @@ async def cmd_hunt(args: argparse.Namespace) -> int:
         return 1
 
     init_db()
-    config = HunterConfig(
-        languages=args.languages.split(",") if args.languages else HunterConfig().languages,
-        max_total_issues=args.max,
-    )
+    languages = args.languages.split(",") if args.languages else None
+
+    if args.mode == "gsoc":
+        # Looser defaults — GSoC orgs include smaller research projects
+        # with fewer stars, and issues stay open longer waiting for
+        # student contributors.
+        cfg_kwargs: dict = dict(
+            mode="gsoc",
+            min_stars=10,
+            updated_since_days=60,
+            max_total_issues=args.max,
+        )
+        if languages is not None:
+            cfg_kwargs["languages"] = languages
+        # In gsoc mode with no language filter, the user is asking
+        # "show me everything from GSoC orgs" — keep the default list
+        # since it's used only for downstream language-aware features
+        # (it doesn't widen the search here).
+        config = HunterConfig(**cfg_kwargs)
+    else:
+        config = HunterConfig(
+            mode="general",
+            languages=languages if languages is not None else HunterConfig().languages,
+            max_total_issues=args.max,
+        )
+
     router = build_router()
 
     async with (
@@ -68,6 +92,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_hunt = sub.add_parser("hunt")
+    p_hunt.add_argument(
+        "--mode", choices=["general", "gsoc"], default="general",
+        help="general (cross-GitHub) or gsoc (only GSoC-listed orgs)",
+    )
     p_hunt.add_argument("--languages", help="Comma-separated languages (default: built-in set)")
     p_hunt.add_argument("--max", type=int, default=50, help="Max total issues to keep")
     p_hunt.set_defaults(func=cmd_hunt)

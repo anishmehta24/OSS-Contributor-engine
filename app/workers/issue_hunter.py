@@ -30,10 +30,11 @@ from app.agents.hunter.health import (
     is_recent_enough,
     repo_health_score,
 )
-from app.agents.hunter.queries import build_queries
+from app.agents.hunter.queries import build_gsoc_queries, build_queries
 from app.agents.hunter.schemas import HunterConfig, HuntStats, IssueCandidate
 from app.db.models import Issue, Repo
 from app.db.vector import insert_vector
+from app.gsoc.queries import find_orgs_for_languages, list_active_orgs
 from app.tools.github import GitHubClient
 from app.tools.github.models import Issue as GHIssue
 from app.tools.github.models import Repo as GHRepo
@@ -164,20 +165,66 @@ def candidate_from_search_issue(gh_issue: GHIssue) -> IssueCandidate | None:
 
 
 # ---------------------------------------------------------------------------
+# GSoC mode helpers
+# ---------------------------------------------------------------------------
+
+# Upper bound on orgs we'll query. With ~6 labels per org, this keeps the
+# total query count under GitHub's 30 searches/minute comfortably.
+GSOC_MAX_ORGS = 25
+
+
+def _resolve_gsoc_org_logins(session: Session, cfg: HunterConfig) -> list[str]:
+    """Pick GSoC org github_logins to scope the hunt against.
+
+    If the config has user languages, narrow to orgs whose primary_languages
+    overlap. Otherwise return all active orgs. Orgs without a github_login
+    (e.g., R Project) can't be queried by GitHub Search, so they're dropped.
+    """
+    if cfg.languages:
+        orgs = find_orgs_for_languages(
+            session,
+            cfg.languages,
+            recent_years=cfg.gsoc_recent_years,
+            limit=GSOC_MAX_ORGS,
+        )
+    else:
+        orgs = list_active_orgs(
+            session,
+            recent_years=cfg.gsoc_recent_years,
+            limit=GSOC_MAX_ORGS,
+        )
+    return [o.github_login for o in orgs if o.github_login]
+
+
+# ---------------------------------------------------------------------------
 # Search + dedup
 # ---------------------------------------------------------------------------
 
 async def collect_candidates(
     gh: GitHubClient,
     config: HunterConfig,
+    *,
+    gsoc_org_logins: list[str] | None = None,
 ) -> tuple[list[IssueCandidate], int]:
-    """Run all search queries; return deduped candidates + total query count."""
-    queries = build_queries(
-        languages=config.languages,
-        labels=config.labels,
-        updated_since_days=config.updated_since_days,
-        min_stars=config.min_stars,
-    )
+    """Run all search queries; return deduped candidates + total query count.
+
+    In GSoC mode, `gsoc_org_logins` drives the search (caller resolves
+    these from the gsoc_orgs table). In general mode it's ignored.
+    """
+    if config.mode == "gsoc":
+        queries = build_gsoc_queries(
+            org_logins=gsoc_org_logins or [],
+            labels=config.labels,
+            updated_since_days=config.updated_since_days,
+            min_stars=config.min_stars,
+        )
+    else:
+        queries = build_queries(
+            languages=config.languages,
+            labels=config.labels,
+            updated_since_days=config.updated_since_days,
+            min_stars=config.min_stars,
+        )
 
     seen_ids: set[int] = set()
     candidates: list[IssueCandidate] = []
@@ -224,7 +271,19 @@ async def hunt(
 
     log.info("hunt_starting", config=cfg.model_dump())
 
-    candidates, query_count = await collect_candidates(gh, cfg)
+    gsoc_org_logins: list[str] = []
+    if cfg.mode == "gsoc":
+        gsoc_org_logins = _resolve_gsoc_org_logins(session, cfg)
+        log.info("hunt_gsoc_mode", org_count=len(gsoc_org_logins))
+        if not gsoc_org_logins:
+            log.warning(
+                "hunt_gsoc_no_orgs_resolved",
+                hint="run `python -m app.db seed-gsoc` and/or `scrape-gsoc`",
+            )
+
+    candidates, query_count = await collect_candidates(
+        gh, cfg, gsoc_org_logins=gsoc_org_logins
+    )
     stats.queries_executed = query_count
     stats.issues_seen = len(candidates)
     log.info("hunt_candidates_collected", count=len(candidates))

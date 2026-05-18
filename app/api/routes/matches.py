@@ -19,6 +19,7 @@ async def get_my_matches(
     top: int = Query(default=10, ge=1, le=50),
     difficulty: str = Query(default="any", pattern="^(any|easy|medium|hard)$"),
     explain: bool = Query(default=True),
+    mode: str = Query(default="general", pattern="^(general|gsoc)$"),
     me: User = CurrentUserDep,
     session: Session = SessionDep,
     voyage=VoyageDep,
@@ -27,6 +28,9 @@ async def get_my_matches(
 
     `explain=true` triggers a batched LLM call to add a "why it fits" line
     per match. Set false to skip and avoid LLM cost.
+
+    `mode="gsoc"` filters candidate issues to those whose repo owner is
+    listed in the gsoc_orgs table (seeded + scraped — see Batches 17/18).
     """
     llm_router = getattr(request.app.state, "llm_router", None)
     use_explain = explain and llm_router is not None
@@ -40,6 +44,7 @@ async def get_my_matches(
             difficulty_pref=difficulty,  # type: ignore[arg-type]
             top_n=top,
             explain=use_explain,
+            mode=mode,  # type: ignore[arg-type]
         )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e

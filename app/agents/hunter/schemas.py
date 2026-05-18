@@ -9,11 +9,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.agents.hunter.queries import BEGINNER_LABELS, DEFAULT_LANGUAGES
 
 Difficulty = Literal["easy", "medium", "hard"]
+HuntMode = Literal["general", "gsoc"]
 
 
 class HunterConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    mode: HuntMode = "general"
     languages: list[str] = Field(default_factory=lambda: list(DEFAULT_LANGUAGES))
     labels: list[str] = Field(default_factory=lambda: list(BEGINNER_LABELS))
     updated_since_days: int = 30
@@ -22,6 +24,9 @@ class HunterConfig(BaseModel):
     max_total_issues: int = 200
     enable_difficulty_llm: bool = True
     enable_embeddings: bool = True
+    # GSoC mode only — how many recent years count as "active" when
+    # selecting orgs from the gsoc_orgs table.
+    gsoc_recent_years: int = 3
 
 
 class IssueCandidate(BaseModel):
