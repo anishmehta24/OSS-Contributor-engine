@@ -1,10 +1,11 @@
-"""DB CLI: init / reset / inspect.
+"""DB CLI: init / reset / inspect / seed.
 
 Usage:
     uv run python -m app.db init           # create tables + vec tables (idempotent)
     uv run python -m app.db reset --yes    # DROP everything + recreate (destructive)
     uv run python -m app.db tables         # list tables
     uv run python -m app.db counts         # row counts per table
+    uv run python -m app.db seed-gsoc      # load bundled GSoC org JSON (idempotent)
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from sqlalchemy import text
 from app.core.logging import configure_logging
 from app.db import models as m
 from app.db.session import get_session, init_db, reset_db, sessionmaker_factory
+from app.gsoc.seeds.loader import load_seed_orgs
 
 
 def cmd_init(_: argparse.Namespace) -> int:
@@ -54,6 +56,13 @@ def cmd_counts(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_seed_gsoc(_: argparse.Namespace) -> int:
+    with get_session() as session:
+        count = load_seed_orgs(session)
+    print(f"Loaded {count} GSoC orgs from bundled seed.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m app.db")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -66,6 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("tables").set_defaults(func=cmd_tables)
     sub.add_parser("counts").set_defaults(func=cmd_counts)
+    sub.add_parser("seed-gsoc").set_defaults(func=cmd_seed_gsoc)
 
     return parser
 

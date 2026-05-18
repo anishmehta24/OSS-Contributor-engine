@@ -1,0 +1,302 @@
+[
+  {
+    "slug": "apache-software-foundation",
+    "name": "Apache Software Foundation",
+    "github_login": "apache",
+    "description": "Umbrella foundation for Apache projects — web, big data, infra.",
+    "homepage_url": "https://www.apache.org/",
+    "primary_languages": ["Java", "Python", "C++", "Scala"],
+    "topics": ["infrastructure", "web", "big-data", "databases"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "mozilla",
+    "name": "Mozilla",
+    "github_login": "mozilla",
+    "description": "Web platform, Firefox, Rust ecosystem, MDN.",
+    "homepage_url": "https://www.mozilla.org/",
+    "primary_languages": ["Rust", "JavaScript", "C++", "Python"],
+    "topics": ["web", "browsers", "privacy"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "python-software-foundation",
+    "name": "Python Software Foundation",
+    "github_login": "python",
+    "description": "CPython and Python ecosystem projects.",
+    "homepage_url": "https://www.python.org/psf/",
+    "primary_languages": ["Python", "C"],
+    "topics": ["language", "scientific-computing"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "django-software-foundation",
+    "name": "Django Software Foundation",
+    "github_login": "django",
+    "description": "Django web framework + community projects.",
+    "homepage_url": "https://www.djangoproject.com/",
+    "primary_languages": ["Python", "JavaScript"],
+    "topics": ["web", "backend"],
+    "years_participated": [2021, 2022, 2023]
+  },
+  {
+    "slug": "postgresql",
+    "name": "PostgreSQL",
+    "github_login": "postgres",
+    "description": "PostgreSQL relational database.",
+    "homepage_url": "https://www.postgresql.org/",
+    "primary_languages": ["C", "SQL"],
+    "topics": ["databases"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "rust-foundation",
+    "name": "Rust Foundation",
+    "github_login": "rust-lang",
+    "description": "Rust language and tooling.",
+    "homepage_url": "https://www.rust-lang.org/",
+    "primary_languages": ["Rust"],
+    "topics": ["language", "systems"],
+    "years_participated": [2023, 2024, 2025]
+  },
+  {
+    "slug": "cncf",
+    "name": "CNCF — Cloud Native Computing Foundation",
+    "github_login": "cncf",
+    "description": "Kubernetes, Prometheus, etcd and other cloud-native projects.",
+    "homepage_url": "https://www.cncf.io/",
+    "primary_languages": ["Go", "Python", "TypeScript"],
+    "topics": ["devops", "cloud", "infrastructure", "kubernetes"],
+    "years_participated": [2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "linux-foundation",
+    "name": "Linux Foundation",
+    "github_login": "linuxfoundation",
+    "description": "Linux kernel and surrounding open-source projects.",
+    "homepage_url": "https://www.linuxfoundation.org/",
+    "primary_languages": ["C", "C++", "Go", "Python"],
+    "topics": ["systems", "infrastructure", "operating-systems"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "kde",
+    "name": "KDE",
+    "github_login": "KDE",
+    "description": "KDE desktop environment and Plasma.",
+    "homepage_url": "https://kde.org/",
+    "primary_languages": ["C++", "QML", "Python"],
+    "topics": ["desktop", "gui"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "gnome",
+    "name": "GNOME",
+    "github_login": "GNOME",
+    "description": "GNOME desktop environment.",
+    "homepage_url": "https://www.gnome.org/",
+    "primary_languages": ["C", "Vala", "JavaScript", "Rust"],
+    "topics": ["desktop", "gui"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "freebsd",
+    "name": "The FreeBSD Project",
+    "github_login": "freebsd",
+    "description": "FreeBSD operating system.",
+    "homepage_url": "https://www.freebsd.org/",
+    "primary_languages": ["C", "C++"],
+    "topics": ["systems", "operating-systems"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "wikimedia-foundation",
+    "name": "Wikimedia Foundation",
+    "github_login": "wikimedia",
+    "description": "Wikipedia, MediaWiki, Wikidata and related projects.",
+    "homepage_url": "https://www.wikimedia.org/",
+    "primary_languages": ["PHP", "JavaScript", "Python", "Lua"],
+    "topics": ["web", "knowledge", "education"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "tor-project",
+    "name": "Tor Project",
+    "github_login": "torproject",
+    "description": "Tor anonymity network and privacy tools.",
+    "homepage_url": "https://www.torproject.org/",
+    "primary_languages": ["C", "Python", "Rust", "JavaScript"],
+    "topics": ["privacy", "security", "networking"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "openmrs",
+    "name": "OpenMRS",
+    "github_login": "openmrs",
+    "description": "Open-source medical records platform.",
+    "homepage_url": "https://openmrs.org/",
+    "primary_languages": ["Java", "TypeScript", "JavaScript"],
+    "topics": ["health", "web", "backend"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "openastronomy",
+    "name": "OpenAstronomy",
+    "github_login": "OpenAstronomy",
+    "description": "Astronomy and astrophysics software (SunPy, Astropy, etc.).",
+    "homepage_url": "https://openastronomy.org/",
+    "primary_languages": ["Python", "C"],
+    "topics": ["scientific-computing", "research"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "opencv",
+    "name": "OpenCV",
+    "github_login": "opencv",
+    "description": "Computer vision library.",
+    "homepage_url": "https://opencv.org/",
+    "primary_languages": ["C++", "Python"],
+    "topics": ["computer-vision", "ml", "scientific-computing"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "scikit-learn",
+    "name": "scikit-learn",
+    "github_login": "scikit-learn",
+    "description": "Machine learning in Python.",
+    "homepage_url": "https://scikit-learn.org/",
+    "primary_languages": ["Python", "Cython"],
+    "topics": ["ml", "scientific-computing"],
+    "years_participated": [2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "numfocus",
+    "name": "NumFOCUS",
+    "github_login": "numfocus",
+    "description": "Fiscal sponsor for NumPy, SciPy, Jupyter, pandas and many other scientific Python projects.",
+    "homepage_url": "https://numfocus.org/",
+    "primary_languages": ["Python", "C"],
+    "topics": ["scientific-computing", "data", "ml"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "julia-language",
+    "name": "The Julia Language",
+    "github_login": "JuliaLang",
+    "description": "Julia programming language and ecosystem.",
+    "homepage_url": "https://julialang.org/",
+    "primary_languages": ["Julia"],
+    "topics": ["language", "scientific-computing"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "r-project",
+    "name": "The R Project for Statistical Computing",
+    "github_login": null,
+    "description": "R language and statistical computing community.",
+    "homepage_url": "https://www.r-project.org/",
+    "primary_languages": ["R", "C"],
+    "topics": ["language", "scientific-computing", "statistics"],
+    "years_participated": [2021, 2022, 2023, 2024]
+  },
+  {
+    "slug": "haskell-org",
+    "name": "Haskell.org",
+    "github_login": "haskell",
+    "description": "Haskell language and surrounding tools (GHC, Cabal, Hackage).",
+    "homepage_url": "https://www.haskell.org/",
+    "primary_languages": ["Haskell"],
+    "topics": ["language", "functional"],
+    "years_participated": [2021, 2022, 2023, 2024]
+  },
+  {
+    "slug": "jenkins-project",
+    "name": "Jenkins",
+    "github_login": "jenkinsci",
+    "description": "Jenkins automation server.",
+    "homepage_url": "https://www.jenkins.io/",
+    "primary_languages": ["Java", "Groovy"],
+    "topics": ["devops", "ci-cd"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "libreoffice",
+    "name": "The Document Foundation (LibreOffice)",
+    "github_login": "LibreOffice",
+    "description": "LibreOffice productivity suite.",
+    "homepage_url": "https://www.libreoffice.org/",
+    "primary_languages": ["C++", "Java", "Python"],
+    "topics": ["desktop", "office", "gui"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "openstreetmap",
+    "name": "OpenStreetMap",
+    "github_login": "openstreetmap",
+    "description": "Free, editable map of the world.",
+    "homepage_url": "https://www.openstreetmap.org/",
+    "primary_languages": ["Ruby", "JavaScript", "Python"],
+    "topics": ["geo", "web", "mapping"],
+    "years_participated": [2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "owasp",
+    "name": "OWASP Foundation",
+    "github_login": "OWASP",
+    "description": "Web application security tools and education.",
+    "homepage_url": "https://owasp.org/",
+    "primary_languages": ["Java", "Python", "JavaScript", "Go"],
+    "topics": ["security"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "incf",
+    "name": "INCF — International Neuroinformatics Coordinating Facility",
+    "github_login": "INCF",
+    "description": "Computational neuroscience tools and data standards.",
+    "homepage_url": "https://www.incf.org/",
+    "primary_languages": ["Python", "C++", "MATLAB"],
+    "topics": ["scientific-computing", "neuroscience", "research"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "score-lab",
+    "name": "SCoRe Lab",
+    "github_login": "scorelab",
+    "description": "Sustainable Computing Research Lab — diverse open-source projects.",
+    "homepage_url": "https://scorelab.org/",
+    "primary_languages": ["Python", "JavaScript", "Java", "Go"],
+    "topics": ["research", "web", "ml"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "joomla",
+    "name": "Joomla!",
+    "github_login": "joomla",
+    "description": "Joomla! content management system.",
+    "homepage_url": "https://www.joomla.org/",
+    "primary_languages": ["PHP", "JavaScript"],
+    "topics": ["web", "cms"],
+    "years_participated": [2021, 2022, 2023, 2024]
+  },
+  {
+    "slug": "ml4sci",
+    "name": "Machine Learning for Science (ML4Sci)",
+    "github_login": "ML4SCI",
+    "description": "Applying ML to physics and other sciences.",
+    "homepage_url": "https://ml4sci.org/",
+    "primary_languages": ["Python"],
+    "topics": ["ml", "scientific-computing", "research"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  },
+  {
+    "slug": "fossasia",
+    "name": "FOSSASIA",
+    "github_login": "fossasia",
+    "description": "Open-source projects across web, data and learning tools.",
+    "homepage_url": "https://fossasia.org/",
+    "primary_languages": ["JavaScript", "Python", "TypeScript"],
+    "topics": ["web", "education", "ml"],
+    "years_participated": [2021, 2022, 2023, 2024, 2025]
+  }
+]

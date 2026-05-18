@@ -239,9 +239,44 @@ class OAuthToken(Base, TimestampMixin):
         return f"<OAuthToken user_id={self.user_id} scopes={self.scopes}>"
 
 
+# ---------------------------------------------------------------------------
+# GSoC orgs (Batch 17) — orgs that participate in Google Summer of Code
+# ---------------------------------------------------------------------------
+
+class GsocOrg(Base, TimestampMixin):
+    """One row per organization that has participated in GSoC.
+
+    Populated by:
+      - JSON seed loader (Batch 17) — well-known orgs hard-coded
+      - GSoC org scraper (Batch 18) — pulls official lists per year
+
+    The Issue Hunter consults this table to restrict its search to orgs that
+    are GSoC-relevant when running in GSoC mode.
+    """
+    __tablename__ = "gsoc_orgs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    slug: Mapped[str] = mapped_column(String(128), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(256), nullable=False)
+    github_login: Mapped[str | None] = mapped_column(String(64), index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    homepage_url: Mapped[str | None] = mapped_column(String(512))
+    project_ideas_url: Mapped[str | None] = mapped_column(String(512))
+    primary_languages: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    topics: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    years_participated: Mapped[list[int]] = mapped_column(JSON, default=list, nullable=False)
+    last_seen_year: Mapped[int | None] = mapped_column(index=True)
+    seed_source: Mapped[str] = mapped_column(String(32), default="manual", nullable=False)
+    # "manual" (JSON seed) | "scraper" (GSoC site)
+
+    def __repr__(self) -> str:
+        return f"<GsocOrg {self.slug} gh={self.github_login} years={self.years_participated}>"
+
+
 # Re-export for convenience.
 __all__ = [
     "AgentRun",
+    "GsocOrg",
     "Investigation",
     "Issue",
     "OAuthToken",
@@ -253,7 +288,7 @@ __all__ = [
 
 def all_models() -> list[type[Base]]:
     """Used by tests and init scripts to enumerate tables."""
-    return [User, UserSkill, Repo, Issue, Investigation, AgentRun, OAuthToken]
+    return [User, UserSkill, Repo, Issue, Investigation, AgentRun, OAuthToken, GsocOrg]
 
 
 # Type stub to silence linters about Any below.
