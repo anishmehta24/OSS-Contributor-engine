@@ -1,0 +1,86 @@
+[project]
+name = "oss-contributor-engine"
+version = "0.1.0"
+description = "Multi-agent system that finds OSS issues matched to your skills and drafts contribution plans."
+requires-python = ">=3.12,<3.13"
+authors = [{ name = "Anish Mehta" }]
+readme = "README.md"
+
+# --- Runtime deps (added batch-by-batch) ---
+dependencies = [
+    # Batch 1
+    "pydantic>=2.7,<3",
+    "pydantic-settings>=2.5,<3",
+    "structlog>=24.4",
+    "python-dotenv>=1.0",
+    "sqlite-vec>=0.1.6",
+    "litellm>=1.50",
+    # Batch 2 — GitHub client
+    "httpx>=0.27,<0.29",
+    # Batch 3 — DB layer (sync SQLAlchemy on stdlib sqlite3, avoids greenlet)
+    "sqlalchemy>=2.0,<3",
+    # Batch 7 — HTTP API
+    "fastapi>=0.115,<0.120",
+    "uvicorn[standard]>=0.32",
+    # Batch 11 — Streamlit UI
+    "streamlit>=1.40,<2",
+    # Local embeddings (replaces Voyage to avoid rate limits / cost)
+    "sentence-transformers>=3.0",
+    # Batch 13 — OAuth + session crypto
+    "cryptography>=43",
+    "itsdangerous>=2.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.7",
+    # Batch 2 — for mocking httpx in unit tests
+    "respx>=0.21",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+# --- Ruff: lint + format in one tool ---
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations", ".venv"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # bugbear
+    "UP",  # pyupgrade
+    "SIM", # simplify
+]
+ignore = [
+    "E501",   # line length handled by formatter
+    "UP046",  # PEP-695 generics: keep `Generic[T]` for Pydantic compatibility
+    "UP047",  # Same — function-level PEP-695 generics
+]
+
+[tool.ruff.format]
+quote-style = "double"
+
+# --- Pytest ---
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "unit: fast, isolated tests with no external deps",
+    "integration: tests that hit real services (DB, network, LLM)",
+]
+asyncio_mode = "auto"
+filterwarnings = [
+    # stdlib deprecation in Python 3.12; harmless for our usage
+    "ignore:datetime.datetime.utcnow.*:DeprecationWarning",
+]
