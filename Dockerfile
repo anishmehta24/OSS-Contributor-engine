@@ -42,7 +42,10 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
 # --no-dev: skip pytest/ruff/respx. NO --extra local-embeddings: skip torch.
-RUN uv sync --frozen --no-dev
+# -v: surface the actual failing package + reason in the build log when a
+# wheel falls back to source and that source build fails. Without it Render
+# only shows uv's generic "Build failures" hint, which isn't actionable.
+RUN uv sync --frozen --no-dev -v
 
 # App code
 COPY app ./app
