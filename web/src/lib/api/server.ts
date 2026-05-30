@@ -15,6 +15,7 @@ import { cookies } from "next/headers";
 import type {
   CostSummary,
   DbStats,
+  FeaturesResponse,
   HealthResponse,
   InvestigationRow,
   MatchesResponse,
@@ -76,6 +77,8 @@ async function api<T>(
 export const fapi = {
   me: () => api<Me>("/auth/me"),
   health: () => api<HealthResponse>("/health", { withSession: false, nullOn: [] }),
+  features: () =>
+    api<FeaturesResponse>("/features", { withSession: false, nullOn: [] }),
 
   /** /users/me returns `{profile: SkillProfile}` — unwrap for ergonomic call sites. */
   async profile(): Promise<SkillProfile | null> {

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import RouterDep, SessionDep
 from app.auth.dependencies import CurrentUserDep
+from app.core.config import settings
 from app.db.models import Investigation, PilotRun, User
 from app.db.session import sessionmaker_factory
 from app.jobs import spawn
@@ -93,6 +94,18 @@ async def create_pilot(
     router_=RouterDep,
 ) -> CreatePilotResponse:
     """Kick off an autonomous-pilot run for a completed investigation."""
+    if not settings.pilot_enabled:
+        # Hosted free-tier deploys disable the pilot (no Docker daemon, no
+        # persistent disk for git clones). Tell the user how to use it.
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Autonomous Pilot is disabled in this deployment — it needs "
+                "a Docker sandbox and persistent disk that free PaaS tiers "
+                "don't provide. Clone the repo and run it locally to use "
+                "the pilot."
+            ),
+        )
     inv = session.get(Investigation, investigation_id)
     if inv is None or inv.user_id != me.id:
         # Don't leak existence to other users.

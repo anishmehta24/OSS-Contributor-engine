@@ -4,6 +4,7 @@
  * Server Component: fetches the latest PilotRun and dispatches to the
  * right sub-component based on status.
  *
+ *   disabled by backend → <PilotDisabled>   (no Docker on free PaaS)
  *   no pilot   → <PilotLauncher>      (intro + "Try fix" button)
  *   queued/running → <PilotProgress>  (polls + shows status)
  *   rate_limited → <PilotRateLimited> (transient capacity wall + retry)
@@ -11,6 +12,7 @@
  *   accepted   → <PilotReview>        (diff + approval flow)
  */
 import { fapi } from "@/lib/api/server";
+import { PilotDisabled } from "@/components/investigations/pilot-disabled";
 import { PilotFailed } from "@/components/investigations/pilot-failed";
 import { PilotLauncher } from "@/components/investigations/pilot-launcher";
 import { PilotProgress } from "@/components/investigations/pilot-progress";
@@ -22,6 +24,14 @@ export async function PilotPanel({
 }: {
   investigationId: string;
 }) {
+  // Server-side flag check before anything else — if the deployment turned
+  // the Pilot off (no Docker / no disk on free PaaS), don't render any of
+  // the launcher/progress/result UI; show the disabled card instead.
+  const features = await fapi.features();
+  if (features && !features.pilot_enabled) {
+    return <PilotDisabled />;
+  }
+
   const pilot = await fapi.latestPilot(investigationId);
 
   // No pilot yet — show the launcher.

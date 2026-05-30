@@ -1,0 +1,42 @@
+# Keep the build context small — Render uploads it to its builder.
+.git
+.github
+.venv
+.venv-*
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+
+# Local data + secrets — must NEVER end up in the image
+.env
+.env.*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+oss_engine.db*
+
+# Pilot scratch space (Docker sandbox, not used in cloud)
+.sandbox
+
+# Frontend — Vercel builds this separately
+web
+node_modules
+
+# Docs / dev-only files
+README.md
+DEPLOY.md
+docs
+tests
+scripts
+run.ps1
+*.md
+
+# Misc
+.DS_Store
+Thumbs.db

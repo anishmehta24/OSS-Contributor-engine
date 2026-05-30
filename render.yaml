@@ -1,0 +1,62 @@
+# Render Blueprint — declarative spec for the FastAPI backend.
+# Apply via: Render Dashboard → New → Blueprint → connect this repo.
+# Render reads this file on every deploy; secrets are still set in the
+# dashboard (sync: false below means "I'll fill this in via the UI").
+#
+# What this provisions:
+#   - 1 free Web Service running the Dockerfile at the repo root
+#   - All non-secret env vars baked in
+#   - Health check on /health so Render knows when the app is ready
+#
+# What you still do MANUALLY in the dashboard after first apply:
+#   1. Fill the 8 `sync: false` env vars (secrets + Neon URL + Vercel URL).
+#   2. Connect a free Neon Postgres and run `CREATE EXTENSION vector;`.
+#   3. (Optional) set up a free cron-job.org ping to /health every 14 min
+#      to keep the free instance warm — Render free spins down after 15
+#      min idle and the cold start is ~50 s.
+#
+# The Pilot's Docker sandbox does NOT run on Render free — PILOT_ENABLED
+# is hard-coded false below. To deploy with a working Pilot, run the
+# backend on a Fly.io machine (real VM) or a cheap VPS instead.
+
+services:
+  - type: web
+    name: oss-engine-api
+    runtime: docker
+    plan: free
+    region: oregon          # change to whichever is closest to your users
+    branch: main
+    autoDeploy: true
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+
+    envVars:
+      # ---- Hard-coded for the hosted deploy ----
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PILOT_ENABLED
+        value: "false"      # no Docker daemon on Render → pilot disabled
+      - key: EMBEDDER_BACKEND
+        value: voyage       # hosted embeddings → no torch in the image
+
+      # ---- Secrets + per-deploy URLs (set in dashboard) ----
+      - key: DATABASE_URL                 # postgresql+psycopg://... from Neon
+        sync: false
+      - key: SESSION_SECRET               # `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+        sync: false
+      - key: GITHUB_OAUTH_CLIENT_ID
+        sync: false
+      - key: GITHUB_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: OAUTH_REDIRECT_URI           # https://<this-service>.onrender.com/auth/callback
+        sync: false
+      - key: OAUTH_POST_LOGIN_REDIRECT    # https://<vercel-app>.vercel.app
+        sync: false
+      - key: VOYAGE_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN                 # optional: server-side GitHub PAT for unauth repo reads
+        sync: false

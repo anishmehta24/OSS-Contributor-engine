@@ -5,17 +5,23 @@ nothing here, and avoids the greenlet C-extension that's flaky on Windows.
 FastAPI routes that hit the DB will use `run_in_threadpool` if needed
 (Batch 7) — for SQLite that's still effectively non-blocking.
 
-The connect listener loads sqlite-vec into every connection so vector
-queries work transparently.
+Dual-dialect support:
+    - sqlite:///...  — local dev + test default. Loads sqlite-vec into every
+      connection and creates `user_skills_vec` / `issues_vec` virtual tables.
+    - postgresql://  — deploy target (Render/Neon). Skips sqlite-vec, ensures
+      the pgvector extension exists, and creates parallel `*_vec` tables with
+      a real `vector(N)` column managed by pgvector.
+
+The vector helpers (app/db/vector.py) dispatch on `session.bind.dialect.name`,
+so call sites stay agnostic.
 """
 from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-import sqlite_vec
 import structlog
-from sqlalchemy import Engine, create_engine, event
+from sqlalchemy import Engine, create_engine, event, make_url
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -29,20 +35,31 @@ log = structlog.get_logger(__name__)
 # Engine factory
 # ---------------------------------------------------------------------------
 
+def _is_sqlite(url: str) -> bool:
+    return make_url(url).get_backend_name() == "sqlite"
+
+
 def make_engine(url: str | None = None, *, echo: bool = False) -> Engine:
-    """Build a sync SQLAlchemy engine and wire sqlite-vec + FK pragma.
+    """Build a sync SQLAlchemy engine for the given DATABASE_URL.
 
-    `check_same_thread=False` lets FastAPI's thread pool reuse pooled
-    connections. SQLAlchemy guarantees serialized access via its pool so
-    we never actually share a connection across threads concurrently.
+    SQLite path: `check_same_thread=False` lets FastAPI's thread pool reuse
+    pooled connections, sqlite-vec is loaded into every connection, and we
+    set WAL + a few PRAGMAs. In-memory SQLite (tests) uses StaticPool so
+    the same connection persists.
 
-    For in-memory SQLite (tests), we use StaticPool so the same connection
-    persists across the whole engine — otherwise each new connection sees
-    an empty `:memory:` DB.
+    Postgres path: standard psycopg connection pool, no extension loading
+    (pgvector is a server-side extension, enabled in init_db via CREATE
+    EXTENSION) — and PRAGMAs are SQLite-only.
     """
     final_url = url or settings.database_url
-    is_in_memory = ":memory:" in final_url
 
+    if _is_sqlite(final_url):
+        return _make_sqlite_engine(final_url, echo=echo)
+    return _make_postgres_engine(final_url, echo=echo)
+
+
+def _make_sqlite_engine(url: str, *, echo: bool) -> Engine:
+    is_in_memory = ":memory:" in url
     kwargs: dict = {
         "echo": echo,
         "future": True,
@@ -51,11 +68,12 @@ def make_engine(url: str | None = None, *, echo: bool = False) -> Engine:
     if is_in_memory:
         kwargs["poolclass"] = StaticPool
 
-    engine = create_engine(final_url, **kwargs)
+    engine = create_engine(url, **kwargs)
 
     @event.listens_for(engine, "connect")
     def _on_connect(dbapi_conn, _connection_record):
         # Load sqlite-vec on every new connection so vector queries always work.
+        import sqlite_vec
         dbapi_conn.enable_load_extension(True)
         sqlite_vec.load(dbapi_conn)
         dbapi_conn.enable_load_extension(False)
@@ -73,6 +91,25 @@ def make_engine(url: str | None = None, *, echo: bool = False) -> Engine:
         cur.close()
 
     return engine
+
+
+def _make_postgres_engine(url: str, *, echo: bool) -> Engine:
+    # Render-style URLs sometimes use the bare `postgres://` scheme that
+    # SQLAlchemy 2 doesn't recognize — normalize to the canonical name.
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return create_engine(
+        url,
+        echo=echo,
+        future=True,
+        # Free-tier Postgres (Neon) idles connections aggressively — recycle
+        # before the upstream drops them to avoid "server closed the
+        # connection unexpectedly" on the next query.
+        pool_pre_ping=True,
+        pool_recycle=300,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -111,13 +148,13 @@ def get_session() -> Iterator[Session]:
 # Imported here so create_all() sees them.
 from app.db import models as _models  # noqa: E402,F401
 
-# Vector tables (vec0 virtual tables) — created via raw SQL since they live
-# outside SQLAlchemy's metadata. Dimension comes from settings so we can
-# swap embedder backends (Voyage 1024 vs sentence-transformers 384) by
-# changing `EMBEDDER_BACKEND` + running `db reset`. The tables MUST match
-# the producer's output dim or inserts fail.
+# Vector tables live OUTSIDE the ORM metadata because each dialect needs a
+# different storage backend (sqlite-vec virtual table vs pgvector column).
+# Dimension comes from settings so swapping embedder backends (Voyage 1024
+# vs local 384) is a config change + `db reset`, not a code edit.
 VEC_DIM = settings.embedder_dim
 
+# SQLite: sqlite-vec's vec0 virtual table — blob storage + MATCH operator.
 VEC_TABLES_SQL = [
     f"""
     CREATE VIRTUAL TABLE IF NOT EXISTS user_skills_vec USING vec0(
@@ -133,9 +170,27 @@ VEC_TABLES_SQL = [
     """,
 ]
 
+# Postgres: a real table with a pgvector `vector(N)` column. `id` mirrors the
+# parent table's PK (UserSkill.id, Issue.id) so it can be FK-joined if needed
+# later. BIGINT covers both (Issue.id is GitHub's, can be large).
+VEC_TABLES_SQL_PG = [
+    f"""
+    CREATE TABLE IF NOT EXISTS user_skills_vec (
+        id BIGINT PRIMARY KEY,
+        embedding vector({VEC_DIM})
+    )
+    """,
+    f"""
+    CREATE TABLE IF NOT EXISTS issues_vec (
+        id BIGINT PRIMARY KEY,
+        embedding vector({VEC_DIM})
+    )
+    """,
+]
+
 
 def init_db(engine: Engine | None = None) -> None:
-    """Create all ORM tables + vec0 virtual tables. Idempotent.
+    """Create all ORM tables + vector tables. Idempotent across both dialects.
 
     Also runs a best-effort additive column migration: `create_all` makes
     NEW tables but never alters EXISTING ones, so a column added to a model
@@ -144,12 +199,19 @@ def init_db(engine: Engine | None = None) -> None:
     common additive case.
     """
     eng = engine or sessionmaker_factory().kw["bind"]
+    is_pg = eng.dialect.name == "postgresql"
+
     with eng.begin() as conn:
+        if is_pg:
+            # pgvector is a server-side extension. Idempotent — no-op if
+            # already present. Requires the role to have CREATE on the DB
+            # (Neon / Supabase grant this on the default user by default).
+            conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector")
         Base.metadata.create_all(conn)
         _add_missing_columns(conn)
-        for stmt in VEC_TABLES_SQL:
+        for stmt in (VEC_TABLES_SQL_PG if is_pg else VEC_TABLES_SQL):
             conn.exec_driver_sql(stmt)
-    log.info("db_initialized", url=str(eng.url))
+    log.info("db_initialized", url=str(eng.url), dialect=eng.dialect.name)
 
 
 def _add_missing_columns(conn) -> None:
@@ -159,10 +221,12 @@ def _add_missing_columns(conn) -> None:
     columns, or columns with a server/Python default). It never drops,
     renames, or retypes — those need a real migration (Alembic), which is
     the right long-term answer. This is a safety net so additive schema
-    drift doesn't brick a dev's existing SQLite file.
+    drift doesn't brick a dev's existing SQLite file (or a hosted DB
+    between deploys).
 
-    SQLite's `ALTER TABLE ADD COLUMN` can't add a NOT NULL column without a
-    default, so we skip those (with a loud warning) rather than crash.
+    On SQLite, `ALTER TABLE ADD COLUMN` can't add a NOT NULL column without
+    a default, so we skip those with a loud warning. Postgres has the same
+    limitation for existing rows, so the skip applies there too.
     """
     from sqlalchemy import inspect as sa_inspect
 
@@ -201,11 +265,14 @@ def _add_missing_columns(conn) -> None:
 def reset_db(engine: Engine | None = None) -> None:
     """Drop everything and recreate. DESTRUCTIVE — dev/test only."""
     eng = engine or sessionmaker_factory().kw["bind"]
+    is_pg = eng.dialect.name == "postgresql"
     with eng.begin() as conn:
         conn.exec_driver_sql("DROP TABLE IF EXISTS issues_vec")
         conn.exec_driver_sql("DROP TABLE IF EXISTS user_skills_vec")
         Base.metadata.drop_all(conn)
+        if is_pg:
+            conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector")
         Base.metadata.create_all(conn)
-        for stmt in VEC_TABLES_SQL:
+        for stmt in (VEC_TABLES_SQL_PG if is_pg else VEC_TABLES_SQL):
             conn.exec_driver_sql(stmt)
-    log.warning("db_reset", url=str(eng.url))
+    log.warning("db_reset", url=str(eng.url), dialect=eng.dialect.name)

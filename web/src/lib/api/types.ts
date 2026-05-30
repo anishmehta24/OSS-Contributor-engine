@@ -99,6 +99,12 @@ export type HealthResponse = {
   services: { [name: string]: boolean };
 };
 
+/** Runtime feature flags from /features. Used to hide UI for capabilities
+ * the current deployment can't actually serve (e.g. the Pilot on free PaaS). */
+export type FeaturesResponse = {
+  pilot_enabled: boolean;
+};
+
 // ---------------------------------------------------------------------------
 // Pilot Coordinator (v3)
 // ---------------------------------------------------------------------------

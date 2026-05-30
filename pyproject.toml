@@ -22,14 +22,25 @@ dependencies = [
     # Batch 7 — HTTP API
     "fastapi>=0.115,<0.120",
     "uvicorn[standard]>=0.32",
-    # Local embeddings (replaces Voyage to avoid rate limits / cost)
-    "sentence-transformers>=3.0",
     # Batch 13 — OAuth + session crypto
     "cryptography>=43",
     "itsdangerous>=2.2",
+    # Deploy — Postgres + pgvector (used when DATABASE_URL is postgresql://...)
+    # Both are pure-Python wheels, tiny — safe to include unconditionally so
+    # `EMBEDDER_BACKEND=voyage + DATABASE_URL=postgres://...` just works on
+    # Render/Fly without touching extras.
+    "psycopg[binary]>=3.2",
+    "pgvector>=0.3",
 ]
 
 [project.optional-dependencies]
+# Local embeddings — pulls torch (~2 GB) and sentence-transformers. Skipped
+# on hosted free-tier deploys (Render's 512 MB RAM can't load it anyway) by
+# setting EMBEDDER_BACKEND=voyage and installing WITHOUT this extra. For
+# local dev: `uv sync --extra local-embeddings`.
+local-embeddings = [
+    "sentence-transformers>=3.0",
+]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",

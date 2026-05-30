@@ -76,6 +76,14 @@ class Settings(BaseSettings):
         default=300, alias="SANDBOX_DEFAULT_TIMEOUT_S",
     )
 
+    # --- Deploy flags ---
+    # The autonomous Pilot needs a Docker daemon for the sandbox + persistent
+    # disk for git clones. Neither exists on free PaaS tiers (Render, Vercel,
+    # Fly free), so the hosted demo disables it and surfaces a "run locally"
+    # message instead. Default ON so local dev / self-hosted setups aren't
+    # surprised; set PILOT_ENABLED=false in the cloud deployment.
+    pilot_enabled: bool = Field(default=True, alias="PILOT_ENABLED")
+
     # --- Safety rails (Batch 37) ---
     # Per-user lifetime LLM spend ceiling, in USD. The pilot (the most
     # expensive op) refuses to start once a user crosses this. 0 = no cap.
