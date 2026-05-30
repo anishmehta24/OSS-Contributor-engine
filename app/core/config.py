@@ -43,7 +43,7 @@ class Settings(BaseSettings):
         alias="OAUTH_REDIRECT_URI",
     )
     oauth_post_login_redirect: str = Field(
-        default="http://localhost:8501",
+        default="http://localhost:3000/auth/handoff",
         alias="OAUTH_POST_LOGIN_REDIRECT",
     )
     # SESSION_SECRET must be a Fernet-compatible key (44 chars base64).
@@ -55,6 +55,36 @@ class Settings(BaseSettings):
     # --- App ---
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     database_url: str = Field(default="sqlite:///./oss_engine.db", alias="DATABASE_URL")
+
+    # --- Sandbox (v3 — Autonomous Contribution Pilot) ---
+    # The Docker image agent code runs inside. Built once via
+    # `python -m app.sandbox build`. Override only if you've rebuilt against
+    # a different tag.
+    sandbox_image: str = Field(
+        default="oss-engine-sandbox:latest", alias="SANDBOX_IMAGE",
+    )
+    # Per-investigation workspaces are nested under this dir on the host.
+    sandbox_workspace_root: str = Field(
+        default=".sandbox", alias="SANDBOX_WORKSPACE_ROOT",
+    )
+    # Hard caps. Docker syntax for memory ("1g", "512m"), float for cpus.
+    sandbox_memory_limit: str = Field(default="1g", alias="SANDBOX_MEMORY_LIMIT")
+    sandbox_cpus: float = Field(default=1.0, alias="SANDBOX_CPUS")
+    # Default command timeout. Individual `runner.run(... timeout_s=N)` calls
+    # can override.
+    sandbox_default_timeout_s: int = Field(
+        default=300, alias="SANDBOX_DEFAULT_TIMEOUT_S",
+    )
+
+    # --- Safety rails (Batch 37) ---
+    # Per-user lifetime LLM spend ceiling, in USD. The pilot (the most
+    # expensive op) refuses to start once a user crosses this. 0 = no cap.
+    max_user_cost_usd: float = Field(default=5.0, alias="MAX_USER_COST_USD")
+    # Comma-separated owners or owner/repo slugs the pilot will NOT fork,
+    # push to, or open PRs against. Use for repos whose maintainers have
+    # opted out of AI-generated contributions. Matching is case-insensitive
+    # and supports both "owner" (blocks all their repos) and "owner/repo".
+    pilot_refuse_list: str = Field(default="", alias="PILOT_REFUSE_LIST")
 
     # ------------------------------------------------------------------
 

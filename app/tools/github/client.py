@@ -33,6 +33,7 @@ from app.tools.github.exceptions import (
 from app.tools.github.models import (
     Commit,
     Issue,
+    PullRequest,
     Repo,
     SearchResult,
     User,
@@ -135,7 +136,9 @@ class GitHubClient:
                 log.debug("github_etag_hit", path=path)
                 return self._etags[cache_key].data
 
-            if response.status_code == 200 or response.status_code == 201:
+            # 200 = OK, 201 = Created, 202 = Accepted (used by /forks while
+            # the fork is being provisioned — body is still the repo data).
+            if response.status_code in (200, 201, 202):
                 data = response.json() if response.content else None
                 if (
                     use_etag
@@ -273,6 +276,80 @@ class GitHubClient:
     async def get_repo(self, full_name: str) -> Repo:
         data = await self._request("GET", f"/repos/{full_name}")
         return Repo.model_validate(data)
+
+    async def fork_repo(self, full_name: str) -> Repo:
+        """Fork `<owner>/<repo>` into the authenticated user's account.
+
+        GitHub returns 202 with the fork data even before the fork is
+        fully provisioned — for tiny repos it's instant, for huge ones
+        it can take 10-30 seconds. Use `wait_for_repo_ready` after this
+        if you need to do anything with the fork right away.
+
+        If the fork already exists on the user's account, GitHub returns
+        the existing fork (no error, idempotent). That's the behavior we
+        want — re-pushing a different branch shouldn't fight the API.
+        """
+        data = await self._request(
+            "POST", f"/repos/{full_name}/forks", use_etag=False,
+        )
+        return Repo.model_validate(data)
+
+    async def wait_for_repo_ready(
+        self,
+        full_name: str,
+        *,
+        max_wait_s: int = 30,
+        poll_interval_s: float = 1.0,
+    ) -> Repo:
+        """Poll until a newly-forked repo's metadata is fetchable.
+
+        Just-created forks 404 for a brief window. We need them addressable
+        before we can `git clone` or push.
+        """
+        elapsed = 0.0
+        while True:
+            try:
+                return await self.get_repo(full_name)
+            except NotFoundError:
+                if elapsed >= max_wait_s:
+                    raise
+                await asyncio.sleep(poll_interval_s)
+                elapsed += poll_interval_s
+
+    async def create_pull_request(
+        self,
+        upstream_full_name: str,
+        *,
+        title: str,
+        body: str,
+        head: str,
+        base: str,
+        draft: bool = True,
+    ) -> PullRequest:
+        """Open a PR on `<upstream_full_name>` from `head` into `base`.
+
+        `head` for a cross-fork PR must include the fork owner — e.g.
+        `dev-login:oss-engine/pilot-abc-issue-42`. `base` is just the
+        branch name on upstream (e.g. `main`).
+
+        `draft=True` by default — and that's not a knob the caller should
+        flip lightly. The v3 design assumes every PR a human reviews
+        before being marked ready. Drafts also bypass GitHub's CI hooks
+        on some setups, which is what we want for AI-generated patches.
+        """
+        data = await self._request(
+            "POST",
+            f"/repos/{upstream_full_name}/pulls",
+            json={
+                "title": title,
+                "body": body,
+                "head": head,
+                "base": base,
+                "draft": draft,
+            },
+            use_etag=False,
+        )
+        return PullRequest.model_validate(data)
 
     async def get_repo_languages(self, full_name: str) -> dict[str, int]:
         return await self._request("GET", f"/repos/{full_name}/languages")

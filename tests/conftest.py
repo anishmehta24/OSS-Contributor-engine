@@ -18,7 +18,15 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.dependencies import get_db_session
 from app.api.errors import register_exception_handlers
-from app.api.routes import admin, auth, health, investigations, matches, users
+from app.api.routes import (
+    admin,
+    auth,
+    health,
+    investigations,
+    matches,
+    pilot,
+    users,
+)
 from app.db.base import Base
 from app.db.session import VEC_TABLES_SQL, make_engine
 
@@ -66,6 +74,7 @@ def api_app(engine) -> FastAPI:
     app.include_router(users.router)
     app.include_router(matches.router)
     app.include_router(investigations.router)
+    app.include_router(pilot.router)
     app.include_router(admin.router)
 
     app.state.github = None

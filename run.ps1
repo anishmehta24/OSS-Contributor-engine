@@ -18,7 +18,7 @@
 #   hunt          - run the Issue Hunter; [-Languages py,go] [-Max 50]
 #   rank          - rank issues for a user; -Login <name> [-Top 10] [-Difficulty any|easy|medium|hard] [-NoExplain] [-Pretty]
 #   serve         - run the FastAPI server with --reload on port 8000
-#   ui            - run the Streamlit UI (talks to http://localhost:8000)
+#                   (Next.js frontend lives in web/; run `cd web ; npm run dev`)
 #   investigate   - run the Investigator crew; -Login <name> -Repo <owner/name> -IssueNumber <n> [-Markdown]
 #   pitch         - draft a comment from a completed investigation; -InvestigationId <uuid> [-Markdown]
 #   clean         - remove caches and .venv
@@ -89,10 +89,10 @@ switch ($Task) {
         uv run python -m app.agents.triager @args
     }
     "serve" {
-        uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-    }
-    "ui" {
-        uv run streamlit run frontend/app.py
+        # --reload-dir app: only watch app/ for changes. Without this, the
+        # reload watcher sees the 700+ files a pilot clones into .sandbox/
+        # and SIGINTs the process tree mid-clone (kills git → exit 130).
+        uv run uvicorn app.main:app --reload --reload-dir app --host 0.0.0.0 --port 8000
     }
     "investigate" {
         if (-not $Login)       { Write-Host "Pass -Login <github_username>"; exit 1 }
@@ -120,7 +120,7 @@ switch ($Task) {
         Write-Host "Unknown task: $Task"
         Write-Host "Available: install, test, lint, fmt, smoke, smoke-gh, smoke-db, smoke-llm,"
         Write-Host "           db-init, db-reset, db-tables, db-counts, profile, hunt, rank,"
-        Write-Host "           investigate, pitch, serve, ui, clean"
+        Write-Host "           investigate, pitch, serve, clean"
         exit 1
     }
 }

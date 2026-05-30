@@ -6,6 +6,7 @@ Usage:
     log = get_logger(__name__)
     log.info("event_name", key=value)   # structured key-value style
 """
+import contextlib
 import logging
 import sys
 
@@ -15,6 +16,20 @@ from app.core.config import settings
 
 
 def configure_logging() -> None:
+    # Force UTF-8 on the console streams. On Windows they default to cp1252,
+    # which raises UnicodeEncodeError the moment any log line contains a
+    # non-latin1 char (e.g. box-drawing chars from a litellm Rich error
+    # panel, or emoji in agent output). A logging call that *raises* is
+    # catastrophic — it can escape an error handler before the failure is
+    # persisted, leaving rows wedged in 'running'. `errors="replace"` means
+    # logging degrades to '?' instead of ever throwing.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            # Stream may be detached/replaced (e.g. pytest capture) — ignore.
+            with contextlib.suppress(ValueError, OSError):
+                reconfigure(encoding="utf-8", errors="replace")
+
     level = getattr(logging, settings.log_level.upper(), logging.INFO)
     logging.basicConfig(
         format="%(message)s",

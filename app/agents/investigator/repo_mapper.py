@@ -14,49 +14,16 @@ from typing import Any
 import structlog
 from sqlalchemy.orm import Session
 
+from app.agents._shared.file_filters import (
+    MAX_BLOB_SIZE_BYTES,
+    is_interesting_path,
+)
 from app.agents.investigator.schemas import IssueRequirements, RepoMap
 from app.llm import call_llm
 
 log = structlog.get_logger(__name__)
 
-# Path fragments that almost never contain useful signal for issue triage.
-IGNORE_FRAGMENTS = (
-    "/node_modules/", "/dist/", "/build/", "/.git/", "/.next/", "/.venv/",
-    "/__pycache__/", "/vendor/", "/target/", "/out/",
-    "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock",
-    "uv.lock", "Cargo.lock", ".min.js", ".min.css",
-)
-
-# File extensions worth showing the LLM.
-SOURCE_EXTENSIONS = {
-    ".py", ".pyi", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
-    ".go", ".rs", ".java", ".kt", ".swift", ".rb", ".php",
-    ".c", ".h", ".cc", ".cpp", ".hpp", ".cs",
-    ".vue", ".svelte", ".astro",
-    ".sh", ".bash", ".ps1",
-    ".sql", ".graphql", ".proto",
-    ".md", ".mdx",
-    ".toml", ".yaml", ".yml", ".json",
-}
-
 MAX_FILES_FOR_LLM = 200
-MAX_BLOB_SIZE_BYTES = 200_000  # skip giant files
-
-
-# ---------------------------------------------------------------------------
-# Pure filtering (testable without GitHub or LLM)
-# ---------------------------------------------------------------------------
-
-def is_interesting_path(path: str) -> bool:
-    lowered = "/" + path.lower()
-    if any(frag in lowered for frag in IGNORE_FRAGMENTS):
-        return False
-    # Match by extension OR by exact filename for things without extensions
-    if "." in path:
-        ext = "." + path.rsplit(".", 1)[1].lower()
-        if ext in SOURCE_EXTENSIONS:
-            return True
-    return path.split("/")[-1] in {"Dockerfile", "Makefile", "Procfile", "go.mod"}
 
 
 def filter_tree(tree: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:

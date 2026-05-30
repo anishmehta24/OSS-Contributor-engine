@@ -135,13 +135,67 @@ VEC_TABLES_SQL = [
 
 
 def init_db(engine: Engine | None = None) -> None:
-    """Create all ORM tables + vec0 virtual tables. Idempotent."""
+    """Create all ORM tables + vec0 virtual tables. Idempotent.
+
+    Also runs a best-effort additive column migration: `create_all` makes
+    NEW tables but never alters EXISTING ones, so a column added to a model
+    after its table already exists would otherwise 500 every query with
+    'no such column'. `_add_missing_columns` closes that gap for the
+    common additive case.
+    """
     eng = engine or sessionmaker_factory().kw["bind"]
     with eng.begin() as conn:
         Base.metadata.create_all(conn)
+        _add_missing_columns(conn)
         for stmt in VEC_TABLES_SQL:
             conn.exec_driver_sql(stmt)
     log.info("db_initialized", url=str(eng.url))
+
+
+def _add_missing_columns(conn) -> None:
+    """Add columns present in the ORM models but missing from the live DB.
+
+    A poor-man's migration: handles ONLY additive changes (new nullable
+    columns, or columns with a server/Python default). It never drops,
+    renames, or retypes — those need a real migration (Alembic), which is
+    the right long-term answer. This is a safety net so additive schema
+    drift doesn't brick a dev's existing SQLite file.
+
+    SQLite's `ALTER TABLE ADD COLUMN` can't add a NOT NULL column without a
+    default, so we skip those (with a loud warning) rather than crash.
+    """
+    from sqlalchemy import inspect as sa_inspect
+
+    inspector = sa_inspect(conn)
+    existing_tables = set(inspector.get_table_names())
+
+    for table in Base.metadata.sorted_tables:
+        if table.name not in existing_tables:
+            continue  # create_all already built it with all columns
+        live_cols = {c["name"] for c in inspector.get_columns(table.name)}
+        for col in table.columns:
+            if col.name in live_cols:
+                continue
+            has_default = (
+                col.nullable
+                or col.default is not None
+                or col.server_default is not None
+            )
+            if not has_default:
+                log.warning(
+                    "db_skip_missing_required_column",
+                    table=table.name,
+                    column=col.name,
+                    reason="NOT NULL without default — needs a real migration",
+                )
+                continue
+            col_type = col.type.compile(dialect=conn.dialect)
+            ddl = f'ALTER TABLE "{table.name}" ADD COLUMN "{col.name}" {col_type}'
+            conn.exec_driver_sql(ddl)
+            log.warning(
+                "db_auto_added_column",
+                table=table.name, column=col.name, type=str(col_type),
+            )
 
 
 def reset_db(engine: Engine | None = None) -> None:

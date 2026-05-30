@@ -4,6 +4,7 @@ from app.telemetry.rollup import (
     CostSummary,
     global_cost,
     investigation_cost,
+    user_cost_usd,
 )
 
 __all__ = [
@@ -11,4 +12,5 @@ __all__ = [
     "CostSummary",
     "global_cost",
     "investigation_cost",
+    "user_cost_usd",
 ]

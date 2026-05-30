@@ -161,11 +161,12 @@ async def callback(
     session.commit()
     log.info("oauth_login_success", user_id=user.id, github_login=github_login)
 
-    # Cross-origin bridge: Streamlit lives on a different port and can't read
-    # cookies set on this domain, so we ALSO pass the signed session value as
-    # a one-time URL param. Streamlit reads it and forwards it as a Cookie
-    # header on its server-side API calls. The cookie is still set normally,
-    # so direct browser usage of the API also works.
+    # Cross-origin bridge: the Next.js frontend runs on a different port in
+    # dev, so a Set-Cookie issued here can't be sent on its subsequent
+    # requests. We pass the signed session value as a one-time URL param;
+    # the frontend's /auth/handoff route handler reads it and re-sets the
+    # cookie under its own origin. The cookie is also set normally so
+    # direct browser usage of this API (curl, Postman) keeps working.
     signed_session = sign_session(user_id=user.id)
     redirect_target = settings.oauth_post_login_redirect
     separator = "&" if "?" in redirect_target else "?"

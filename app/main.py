@@ -15,7 +15,15 @@ import structlog
 from fastapi import FastAPI
 
 from app.api.errors import register_exception_handlers
-from app.api.routes import admin, auth, health, investigations, matches, users
+from app.api.routes import (
+    admin,
+    auth,
+    health,
+    investigations,
+    matches,
+    pilot,
+    users,
+)
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.session import init_db
@@ -33,6 +41,16 @@ async def lifespan(app: FastAPI):
 
     # Ensure schema exists (idempotent).
     init_db()
+
+    # Reconcile pilots orphaned by the previous shutdown — in-process
+    # background tasks don't survive a restart, so anything still queued/
+    # running at boot is dead and gets marked failed (else the UI polls it
+    # forever).
+    from app.db.session import sessionmaker_factory
+    from app.pilot import reconcile_orphaned_pilots
+    n_orphans = reconcile_orphaned_pilots(sessionmaker_factory())
+    if n_orphans:
+        log.warning("reconciled_orphaned_pilots_at_startup", count=n_orphans)
 
     # GitHub client (only if configured)
     app.state.github = (
@@ -101,6 +119,7 @@ def create_app() -> FastAPI:
     app.include_router(users.router)
     app.include_router(matches.router)
     app.include_router(investigations.router)
+    app.include_router(pilot.router)
     app.include_router(admin.router)
     return app
 

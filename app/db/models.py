@@ -273,6 +273,80 @@ class GsocOrg(Base, TimestampMixin):
         return f"<GsocOrg {self.slug} gh={self.github_login} years={self.years_participated}>"
 
 
+# ---------------------------------------------------------------------------
+# Pilot Runs (Batch 33) — v3 Autonomous Contribution Pilot
+# ---------------------------------------------------------------------------
+
+class PilotRun(Base, TimestampMixin):
+    """One autonomous-pilot attempt against a completed investigation.
+
+    Each pilot run is the Reviewer loop wrapped in DB persistence:
+    Code Explorer → (Patch Writer → Test Runner → Decide)×N → Result.
+
+    Status transitions:
+        queued       — row just created, background task hasn't started
+        running      — workspace cloned, agents at work
+        accepted     — Reviewer accepted some attempt; `accepted_diff` is set
+        rejected     — loop exhausted attempts or LLM gave up cleanly
+        rate_limited — every LLM provider was throttled/unavailable; transient,
+                       retry shortly (NOT a genuine failure to fix)
+        failed       — sandbox / infra / clone error — see `error`
+
+    One investigation can have multiple pilot runs over time (e.g., user
+    re-runs after fixing env issues), so this is a 1-to-many relationship.
+    """
+    __tablename__ = "pilot_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    investigation_id: Mapped[str] = mapped_column(
+        ForeignKey("investigations.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(16), default="queued", nullable=False, index=True,
+    )
+    summary: Mapped[str | None] = mapped_column(Text)
+    attempts_made: Mapped[int] = mapped_column(default=0, nullable=False)
+    accepted_attempt_number: Mapped[int | None] = mapped_column()
+    accepted_diff: Mapped[str | None] = mapped_column(Text)
+    # Full ReviewerResult dumped as JSON — for the UI to render the
+    # per-attempt transcript without hitting a separate table.
+    transcript_json: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    # ---- Push to user's fork (Batch 34) ---------------------------------
+    # Populated when an accepted diff is pushed to the user's GitHub fork.
+    # All four stay null until the push succeeds (push_error fills on
+    # failure, others remain null).
+    fork_url: Mapped[str | None] = mapped_column(String(512))
+    branch_ref: Mapped[str | None] = mapped_column(String(256))
+    pushed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    push_error: Mapped[str | None] = mapped_column(Text)
+
+    # ---- Draft PR opened upstream (Batch 35) ----------------------------
+    # Populated when a draft PR is opened on the upstream repo from the
+    # user's fork branch. pr_error fills on failure; the others stay null.
+    pr_url: Mapped[str | None] = mapped_column(String(512))
+    pr_number: Mapped[int | None] = mapped_column()
+    pr_opened_at: Mapped[datetime | None] = mapped_column(DateTime)
+    pr_error: Mapped[str | None] = mapped_column(Text)
+
+    investigation: Mapped[Investigation] = relationship("Investigation")
+    user: Mapped[User] = relationship("User")
+
+    def __repr__(self) -> str:
+        return (
+            f"<PilotRun {self.id[:8]} inv={self.investigation_id[:8]} "
+            f"status={self.status}>"
+        )
+
+
 # Re-export for convenience.
 __all__ = [
     "AgentRun",
@@ -280,6 +354,7 @@ __all__ = [
     "Investigation",
     "Issue",
     "OAuthToken",
+    "PilotRun",
     "Repo",
     "User",
     "UserSkill",
@@ -288,7 +363,10 @@ __all__ = [
 
 def all_models() -> list[type[Base]]:
     """Used by tests and init scripts to enumerate tables."""
-    return [User, UserSkill, Repo, Issue, Investigation, AgentRun, OAuthToken, GsocOrg]
+    return [
+        User, UserSkill, Repo, Issue,
+        Investigation, AgentRun, OAuthToken, GsocOrg, PilotRun,
+    ]
 
 
 # Type stub to silence linters about Any below.

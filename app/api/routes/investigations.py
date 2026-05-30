@@ -68,10 +68,12 @@ class InvestigationRow(BaseModel):
     status: str
     repo: str | None
     issue_number: int | None
+    issue_url: str | None = None
     error: str | None = None
     started_at: str | None = None
     completed_at: str | None = None
     markdown_report: str | None = None
+    pitch_md: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -187,10 +189,12 @@ async def get_investigation(
         status=inv.status,
         repo=inv.issue.repo.full_name if inv.issue and inv.issue.repo else None,
         issue_number=inv.issue.number if inv.issue else None,
+        issue_url=inv.issue.html_url if inv.issue else None,
         error=inv.error,
         started_at=inv.started_at.isoformat() if inv.started_at else None,
         completed_at=inv.completed_at.isoformat() if inv.completed_at else None,
         markdown_report=inv.report_md,
+        pitch_md=inv.pitch_md,
     )
 
 
@@ -361,10 +365,13 @@ async def list_my_investigations(
             status=r.status,
             repo=r.issue.repo.full_name if r.issue and r.issue.repo else None,
             issue_number=r.issue.number if r.issue else None,
+            issue_url=r.issue.html_url if r.issue else None,
             error=r.error,
             started_at=r.started_at.isoformat() if r.started_at else None,
             completed_at=r.completed_at.isoformat() if r.completed_at else None,
             markdown_report=None,
+            # Pitch text included so /pitches can list without an extra fetch.
+            pitch_md=r.pitch_md,
         )
         for r in rows
     ]

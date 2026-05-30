@@ -13,3 +13,9 @@ __pycache__/
 .DS_Store
 .idea/
 .vscode/settings.local.json
+
+# Sandbox workspaces (per-investigation scratch dirs for v3)
+.sandbox/
+
+# Local Docker build cache
+.docker-buildx-cache/

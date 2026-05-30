@@ -88,3 +88,18 @@ class SearchResult(_GHModel, Generic[T]):
     total_count: int
     incomplete_results: bool = False
     items: list[T]
+
+
+class PullRequest(_GHModel):
+    """Slim view of a created PR — what we surface back to the caller of
+    `create_pull_request`. GitHub returns much more; we ignore the rest."""
+
+    id: int
+    number: int
+    state: str  # "open" | "closed"
+    draft: bool = False
+    title: str
+    body: str | None = None
+    html_url: str
+    created_at: datetime | None = None
+    merged_at: datetime | None = None

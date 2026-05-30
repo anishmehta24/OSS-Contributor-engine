@@ -152,3 +152,190 @@ async def test_5xx_retries_and_eventually_raises(client: GitHubClient, monkeypat
 async def test_init_without_token_raises():
     with pytest.raises(ValueError):
         GitHubClient(token="")
+
+
+# ---------------------------------------------------------------------------
+# fork_repo + wait_for_repo_ready (Batch 34)
+# ---------------------------------------------------------------------------
+
+_REPO_PAYLOAD = {
+    "id": 1296269,
+    "name": "Hello-World",
+    "full_name": "octocat/Hello-World",
+    "html_url": "https://github.com/octocat/Hello-World",
+    "description": "My first repository on GitHub!",
+    "language": "Python",
+    "stargazers_count": 80,
+    "forks_count": 9,
+    "open_issues_count": 0,
+    "archived": False,
+    "fork": False,
+    "default_branch": "main",
+    "topics": [],
+}
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_fork_repo_returns_typed_repo(client: GitHubClient):
+    route = respx.post(f"{API}/repos/upstream/widget/forks").mock(
+        return_value=httpx.Response(202, json=_REPO_PAYLOAD),
+    )
+    repo = await client.fork_repo("upstream/widget")
+    assert route.called
+    assert repo.full_name == "octocat/Hello-World"
+    # POST went out as POST, not GET.
+    assert route.calls[0].request.method == "POST"
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_fork_repo_surfaces_auth_error(client: GitHubClient):
+    respx.post(f"{API}/repos/upstream/widget/forks").mock(
+        return_value=httpx.Response(401, json={"message": "Bad creds"}),
+    )
+    with pytest.raises(AuthError):
+        await client.fork_repo("upstream/widget")
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_wait_for_repo_ready_polls_until_200(
+    client: GitHubClient, monkeypatch,
+):
+    """First two calls 404 (fork still provisioning), third succeeds."""
+    sleeps: list[float] = []
+
+    async def fake_sleep(s: float) -> None:
+        sleeps.append(s)
+
+    monkeypatch.setattr("asyncio.sleep", fake_sleep)
+
+    route = respx.get(f"{API}/repos/me/widget").mock(
+        side_effect=[
+            httpx.Response(404, json={"message": "Not Found"}),
+            httpx.Response(404, json={"message": "Not Found"}),
+            httpx.Response(200, json=_REPO_PAYLOAD),
+        ],
+    )
+    repo = await client.wait_for_repo_ready(
+        "me/widget", max_wait_s=10, poll_interval_s=0.1,
+    )
+    assert repo.full_name == "octocat/Hello-World"
+    assert route.call_count == 3
+    assert len(sleeps) == 2  # slept twice between the three calls
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_wait_for_repo_ready_gives_up_after_max_wait(
+    client: GitHubClient, monkeypatch,
+):
+    sleeps: list[float] = []
+
+    async def fake_sleep(s: float) -> None:
+        sleeps.append(s)
+
+    monkeypatch.setattr("asyncio.sleep", fake_sleep)
+
+    respx.get(f"{API}/repos/me/ghost").mock(
+        return_value=httpx.Response(404, json={"message": "Not Found"}),
+    )
+    with pytest.raises(NotFoundError):
+        await client.wait_for_repo_ready(
+            "me/ghost", max_wait_s=0.5, poll_interval_s=0.2,
+        )
+
+
+# ---------------------------------------------------------------------------
+# create_pull_request (Batch 35)
+# ---------------------------------------------------------------------------
+
+_PR_PAYLOAD = {
+    "id": 555,
+    "number": 42,
+    "state": "open",
+    "draft": True,
+    "title": "[oss-engine] Attempted fix for #1: a bug",
+    "body": "AI generated",
+    "html_url": "https://github.com/upstream/widget/pull/42",
+    "created_at": "2026-05-23T12:00:00Z",
+    "merged_at": None,
+}
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_create_pull_request_happy_path(client: GitHubClient):
+    route = respx.post(f"{API}/repos/upstream/widget/pulls").mock(
+        return_value=httpx.Response(201, json=_PR_PAYLOAD),
+    )
+    pr = await client.create_pull_request(
+        "upstream/widget",
+        title="[oss-engine] Attempted fix for #1: a bug",
+        body="AI generated",
+        head="dev-login:oss-engine/pilot-abc-issue-1",
+        base="main",
+    )
+    assert pr.number == 42
+    assert pr.draft is True
+    assert pr.html_url.endswith("/pull/42")
+
+    # Body shape was correct.
+    body = route.calls[0].request.read().decode("utf-8")
+    import json as _json
+    posted = _json.loads(body)
+    assert posted["draft"] is True
+    assert posted["head"] == "dev-login:oss-engine/pilot-abc-issue-1"
+    assert posted["base"] == "main"
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_create_pull_request_defaults_to_draft(client: GitHubClient):
+    """draft=True must default ON — we don't want non-draft PRs by accident."""
+    route = respx.post(f"{API}/repos/upstream/widget/pulls").mock(
+        return_value=httpx.Response(201, json=_PR_PAYLOAD),
+    )
+    await client.create_pull_request(
+        "upstream/widget", title="t", body="b", head="x:y", base="main",
+    )
+    import json as _json
+    posted = _json.loads(route.calls[0].request.read().decode("utf-8"))
+    assert posted["draft"] is True
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_create_pull_request_surfaces_auth_error(client: GitHubClient):
+    respx.post(f"{API}/repos/upstream/widget/pulls").mock(
+        return_value=httpx.Response(401, json={"message": "Bad creds"}),
+    )
+    with pytest.raises(AuthError):
+        await client.create_pull_request(
+            "upstream/widget", title="t", body="b", head="x:y", base="main",
+        )
+
+
+@pytest.mark.unit
+@respx.mock
+async def test_create_pull_request_surfaces_already_exists_as_github_error(
+    client: GitHubClient,
+):
+    """GitHub returns 422 with a specific message when a PR already exists
+    for this head -> base pair."""
+    respx.post(f"{API}/repos/upstream/widget/pulls").mock(
+        return_value=httpx.Response(422, json={
+            "message": "Validation Failed",
+            "errors": [{
+                "resource": "PullRequest",
+                "code": "custom",
+                "message": "A pull request already exists for dev-login:oss-engine/pilot-abc-issue-1.",
+            }],
+        }),
+    )
+    with pytest.raises(GitHubError) as excinfo:
+        await client.create_pull_request(
+            "upstream/widget", title="t", body="b", head="x:y", base="main",
+        )
+    assert "already exists" in str(excinfo.value)

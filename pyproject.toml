@@ -22,8 +22,6 @@ dependencies = [
     # Batch 7 — HTTP API
     "fastapi>=0.115,<0.120",
     "uvicorn[standard]>=0.32",
-    # Batch 11 — Streamlit UI
-    "streamlit>=1.40,<2",
     # Local embeddings (replaces Voyage to avoid rate limits / cost)
     "sentence-transformers>=3.0",
     # Batch 13 — OAuth + session crypto

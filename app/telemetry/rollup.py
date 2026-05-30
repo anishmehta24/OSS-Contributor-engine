@@ -10,7 +10,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import AgentRun
@@ -108,3 +108,17 @@ def global_cost(session: Session) -> CostSummary:
     """Cost across every LLM call we've ever made."""
     runs = session.execute(select(AgentRun)).scalars().all()
     return aggregate(runs, scope="global")
+
+
+def user_cost_usd(session: Session, user_id: int) -> float:
+    """Lifetime LLM spend for one user, in USD.
+
+    Aggregated in SQL (a single SUM) rather than pulling rows — this is on
+    the hot path for the cost-cap check, so we keep it cheap even as
+    agent_runs grows.
+    """
+    total = session.execute(
+        select(func.coalesce(func.sum(AgentRun.cost_usd), 0.0))
+        .where(AgentRun.user_id == user_id),
+    ).scalar()
+    return float(total or 0.0)

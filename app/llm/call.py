@@ -25,6 +25,42 @@ log = structlog.get_logger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 
+class ProvidersExhaustedError(RuntimeError):
+    """Every model in the router fallback chain failed with a capacity error.
+
+    This means rate limits / quota / provider-down (free-tier TPM caps,
+    HTTP 429, Gemini 503), NOT that a model considered the task and declined.
+    Callers should treat it as "retry shortly", distinct from a genuine
+    failure — e.g. the Pilot marks the run `rate_limited` rather than
+    `rejected` so the UI tells the user to try again instead of implying the
+    agent couldn't solve the issue.
+    """
+
+
+# Substrings that mark a provider-capacity / transient failure (vs a real
+# bug). Matched case-insensitively against the exception type + message after
+# the whole fallback chain has been exhausted by the router.
+_CAPACITY_SIGNATURES = (
+    "ratelimiterror",
+    "rate limit",
+    "rate_limit",
+    "tokens per minute",
+    "request too large",
+    "quota",
+    "resource_exhausted",
+    "serviceunavailable",
+    "service unavailable",
+    "overloaded",
+    " 429",
+    " 503",
+)
+
+
+def _is_capacity_error(exc: Exception) -> bool:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(sig in text for sig in _CAPACITY_SIGNATURES)
+
+
 @dataclass
 class LLMResult:
     text: str
@@ -125,11 +161,18 @@ def call_llm(
             text="", provider="unknown", model="unknown", fallback_depth=-1,
             tokens_in=0, tokens_out=0, cost_usd=0.0, latency_ms=latency_ms,
         )
+        capacity = _is_capacity_error(e)
         _record_telemetry(
             session, agent_name=agent_name,
             investigation_id=investigation_id, user_id=user_id,
-            result=empty, status="error", error=str(e)[:500],
+            result=empty,
+            status="rate_limited" if capacity else "error",
+            error=str(e)[:500],
         )
+        if capacity:
+            # All fallbacks were rate-limited / unavailable — surface a typed
+            # error so the caller can mark the work "retry" not "failed".
+            raise ProvidersExhaustedError(str(e)[:300]) from e
         raise
 
     latency_ms = int((time.monotonic() - start) * 1000)
