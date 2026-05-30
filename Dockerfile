@@ -21,10 +21,15 @@ ENV PYTHONUNBUFFERED=1 \
 
 # git: needed by the investigation pipeline for repo intelligence (NOT the
 # pilot sandbox, which is disabled in this image). curl: healthcheck.
-# build-essential is intentionally omitted — all wheels we need (pgvector,
-# psycopg[binary]) ship prebuilt.
+# build-essential + libpq-dev: a few transitive wheels (e.g. uvloop on some
+# musl/glibc combos) fall back to a source build, and psycopg sometimes
+# wants libpq headers even with the binary wheel. Cheap insurance — the
+# packages add ~150 MB to the build layer but nothing to the runtime layer
+# we ship (the venv is what matters).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates curl \
+    && apt-get install -y --no-install-recommends \
+        git ca-certificates curl \
+        build-essential libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir uv
