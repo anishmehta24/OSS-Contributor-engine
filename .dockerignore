@@ -29,13 +29,13 @@ web
 node_modules
 
 # Docs / dev-only files
-README.md
 DEPLOY.md
 docs
 tests
 scripts
 run.ps1
 *.md
+!README.md
 
 # Misc
 .DS_Store

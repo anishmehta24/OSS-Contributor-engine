@@ -42,13 +42,17 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
 # --no-dev: skip pytest/ruff/respx. NO --extra local-embeddings: skip torch.
+# --no-install-project: app/ and README.md are copied in the next layer.
 # -v: surface the actual failing package + reason in the build log when a
 # wheel falls back to source and that source build fails. Without it Render
 # only shows uv's generic "Build failures" hint, which isn't actionable.
-RUN uv sync --frozen --no-dev -v
+RUN uv sync --frozen --no-dev --no-install-project -v
 
-# App code
+# Copy the files required by the Hatch project build, then install the project
+# into the already-populated environment.
+COPY README.md ./
 COPY app ./app
+RUN uv sync --frozen --no-dev -v
 
 # Render injects $PORT; default to 8000 for local `docker run` parity.
 ENV PORT=8000
@@ -58,5 +62,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD curl -fsS http://localhost:${PORT}/health || exit 1
 
-# Shell form so $PORT expands. One worker on free tier (512 MB RAM).
-CMD uv run uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers 1
+# Shell form so $PORT expands. --no-sync uses the environment built above.
+# One worker on free tier (512 MB RAM).
+CMD uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers 1
