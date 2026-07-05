@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Inter, Fraunces, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -10,11 +10,13 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
-// Headings / display — Space Grotesk (technical, distinctive).
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
+// Headings / display — Fraunces (a classic old-style serif with modern
+// optical sizing). Gives the whole product an editorial, timeless feel.
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
 });
 
 // Monospace — JetBrains Mono (code, numbers, metadata).
@@ -43,12 +45,12 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${fraunces.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background font-sans">
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
+          defaultTheme="light"
           enableSystem
           disableTransitionOnChange
         >
