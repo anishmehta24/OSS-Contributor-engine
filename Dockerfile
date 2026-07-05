@@ -51,8 +51,10 @@ COPY pyproject.toml uv.lock ./
 # only shows uv's generic "Build failures" hint, which isn't actionable.
 RUN uv sync --frozen --no-dev --no-install-project -v
 
-# App code
+# App code + the README referenced by pyproject's `readme = "README.md"`
+# (hatchling reads it to build the project's metadata, so it must be present).
 COPY app ./app
+COPY README.md ./
 
 # Source is present now — install the project itself (fast; deps are cached).
 RUN uv sync --frozen --no-dev -v
