@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Sparkles } from "lucide-react";
+import { GitPullRequestArrow } from "lucide-react";
 import { GitHubIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,8 +18,8 @@ export default function SignInPage() {
     <div className="mx-auto flex min-h-[calc(100vh-7rem)] max-w-md flex-col items-center justify-center px-6 py-12">
       <Card className="w-full border-border/60 shadow-xl shadow-primary/5">
         <CardHeader className="space-y-3 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Sparkles className="h-6 w-6" />
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <GitPullRequestArrow className="h-6 w-6" />
           </div>
           <CardTitle className="text-2xl tracking-tight">
             Sign in to OSS Engine

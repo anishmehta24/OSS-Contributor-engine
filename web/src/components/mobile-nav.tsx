@@ -2,7 +2,13 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { LogOut, Menu, Settings, Sparkles, User as UserIcon } from "lucide-react";
+import {
+  GitPullRequestArrow,
+  LogOut,
+  Menu,
+  Settings,
+  User as UserIcon,
+} from "lucide-react";
 import type { Me } from "@/lib/api/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,8 +42,10 @@ export function MobileNav({ me }: { me: Me }) {
       </SheetTrigger>
       <SheetContent side="right" className="w-72 p-0">
         <SheetHeader className="px-4 pt-5 pb-3 border-b border-border/40">
-          <SheetTitle className="flex items-center gap-2 text-base font-semibold">
-            <Sparkles className="h-5 w-5 text-primary" />
+          <SheetTitle className="flex items-center gap-2.5 font-heading text-base font-semibold tracking-tight">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary text-primary-foreground">
+              <GitPullRequestArrow className="h-4 w-4" />
+            </span>
             OSS Engine
           </SheetTitle>
           <div className="mt-2 text-sm">

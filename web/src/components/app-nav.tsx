@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import { GitPullRequestArrow } from "lucide-react";
 import type { Me } from "@/lib/api/types";
 import { NavLinks } from "@/components/nav-links";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -19,8 +19,13 @@ export function AppNav({ me }: { me: Me }) {
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
         {/* Brand */}
         <div className="flex items-center gap-6">
-          <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
-            <Sparkles className="h-5 w-5 text-primary" />
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2.5 font-heading text-[15px] font-semibold tracking-tight"
+          >
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground">
+              <GitPullRequestArrow className="h-[18px] w-[18px]" />
+            </span>
             <span>OSS Engine</span>
           </Link>
           {/* Desktop nav */}
