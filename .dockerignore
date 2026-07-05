@@ -37,6 +37,10 @@ scripts
 run.ps1
 *.md
 
+# ...except README.md: pyproject declares `readme = "README.md"`, so the
+# hatchling build needs it in the context. (Negation must follow *.md above.)
+!README.md
+
 # Misc
 .DS_Store
 Thumbs.db
