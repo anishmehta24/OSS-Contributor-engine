@@ -49,22 +49,21 @@ export default async function LandingPage() {
     <>
       {/* Hero */}
       <section className="mx-auto max-w-6xl px-6 pt-16 pb-20 sm:pt-24 sm:pb-24">
-        <div className="max-w-3xl">
+        <div className="mx-auto max-w-3xl text-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-border bg-accent/50 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-primary">
             <GitHubIcon className="h-3.5 w-3.5" />
             Open source · Multi-agent
           </span>
           <h1 className="mt-6 text-balance text-5xl font-medium leading-[1.03] sm:text-7xl">
-            Open-source issues
-            <br />
-            that <span className="italic text-primary">fit your skills</span>.
+            Open-source issues that{" "}
+            <span className="italic text-primary">fit your skills</span>.
           </h1>
-          <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground sm:text-xl">
+          <p className="mx-auto mt-6 max-w-xl text-balance text-lg leading-relaxed text-muted-foreground sm:text-xl">
             Five agents profile your GitHub history, hunt matching issues,
             investigate one end-to-end, and draft a comment you&apos;d feel
             comfortable posting.
           </p>
-          <div className="mt-9 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+          <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               href="/signin"
               className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-7 py-3.5 font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 sm:w-auto"

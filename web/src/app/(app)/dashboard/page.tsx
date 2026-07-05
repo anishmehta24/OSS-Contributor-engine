@@ -1,27 +1,19 @@
 import { Suspense } from "react";
 import { fapi } from "@/lib/api/server";
-import { CostCard } from "@/components/dashboard/cost-card";
-import {
-  InvestigationsPreviewCard,
-} from "@/components/dashboard/investigations-preview-card";
-import {
-  MatchesPreviewCard,
-} from "@/components/dashboard/matches-preview-card";
+import { InvestigationsPreviewCard } from "@/components/dashboard/investigations-preview-card";
+import { MatchesPreviewCard } from "@/components/dashboard/matches-preview-card";
 import { ProfileCard } from "@/components/dashboard/profile-card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
-  // `me` is already fetched in the layout, but each card is its own data
-  // boundary so they can stream in independently when a card is slow.
-  // Cheap call here is fine — Next memoizes fetch() within a render pass.
   const me = await fapi.me();
   const greetName = me?.name?.trim().split(" ")[0] || me?.github_login || "";
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
-      {/* Hero greeting */}
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+      {/* Editorial header */}
       <header className="mb-8 border-b border-border pb-6">
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
           Dashboard
@@ -34,29 +26,79 @@ export default async function DashboardPage() {
         </p>
       </header>
 
-      {/* 2-column grid on md+, single column on mobile. Each card streams
-          independently via Suspense so a slow API doesn't block the others. */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Suspense fallback={<CardSkeleton />}>
-          <ProfileCard />
-        </Suspense>
-        <Suspense fallback={<CardSkeleton />}>
-          <CostCard />
-        </Suspense>
-        <Suspense fallback={<CardSkeleton tall />}>
-          <MatchesPreviewCard />
-        </Suspense>
-        <Suspense fallback={<CardSkeleton tall />}>
-          <InvestigationsPreviewCard />
-        </Suspense>
+      {/* Quick-stats strip */}
+      <Suspense fallback={<StatStripSkeleton />}>
+        <QuickStats />
+      </Suspense>
+
+      {/* Bento: profile (1) + latest matches (2), then investigations full-width */}
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-1">
+          <Suspense fallback={<PanelSkeleton />}>
+            <ProfileCard />
+          </Suspense>
+        </div>
+        <div className="lg:col-span-2">
+          <Suspense fallback={<PanelSkeleton tall />}>
+            <MatchesPreviewCard />
+          </Suspense>
+        </div>
+        <div className="lg:col-span-3">
+          <Suspense fallback={<PanelSkeleton />}>
+            <InvestigationsPreviewCard />
+          </Suspense>
+        </div>
       </div>
     </div>
   );
 }
 
-function CardSkeleton({ tall = false }: { tall?: boolean }) {
+async function QuickStats() {
+  const [stats, cost] = await Promise.all([
+    fapi.dbStats().catch(() => null),
+    fapi.globalCost().catch(() => null),
+  ]);
+  const cells = [
+    { label: "issues in pool", value: (stats?.issues ?? 0).toLocaleString() },
+    {
+      label: "investigations",
+      value: (stats?.investigations ?? 0).toLocaleString(),
+    },
+    { label: "llm calls", value: (cost?.total_calls ?? 0).toLocaleString() },
+    { label: "spent", value: `$${(cost?.total_cost_usd ?? 0).toFixed(2)}` },
+  ];
   return (
-    <div className="rounded-xl border border-border p-6 space-y-3">
+    <dl className="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-4 sm:divide-y-0">
+      {cells.map((c) => (
+        <div key={c.label} className="px-5 py-5">
+          <dt className="font-mono text-[0.65rem] uppercase tracking-[0.15em] text-muted-foreground">
+            {c.label}
+          </dt>
+          <dd className="mt-2 font-heading text-2xl font-medium tabular-nums">
+            {c.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function StatStripSkeleton() {
+  return (
+    <div className="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-4 sm:divide-y-0">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="space-y-2 px-5 py-5">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-7 w-16" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PanelSkeleton({ tall = false }: { tall?: boolean }) {
+  return (
+    <div className="space-y-4 rounded-xl border border-border bg-card p-6">
       <Skeleton className="h-3.5 w-24" />
       <Skeleton className="h-6 w-40" />
       <div className="space-y-2 pt-2">

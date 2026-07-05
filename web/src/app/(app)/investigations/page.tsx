@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ExternalLink, Microscope, Search } from "lucide-react";
+import { ArrowRight, ExternalLink, Microscope, Search } from "lucide-react";
 import { fapi } from "@/lib/api/server";
 import { Button } from "@/components/ui/button";
 import {
@@ -81,7 +81,7 @@ export default async function InvestigationsListPage({
       {rows.length === 0 ? (
         <EmptyState hasAny={all.length > 0} status={status} />
       ) : (
-        <div className="space-y-2">
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
           {rows.map((r) => (
             <InvestigationRowCard key={r.id} r={r} />
           ))}
@@ -91,53 +91,62 @@ export default async function InvestigationsListPage({
   );
 }
 
+const RAIL: Record<string, string> = {
+  running: "bg-primary",
+  completed: "bg-emerald-500",
+  failed: "bg-destructive",
+  queued: "bg-muted-foreground/40",
+};
+
 function InvestigationRowCard({ r }: { r: InvestigationRow }) {
   const title =
     r.repo && r.issue_number ? `${r.repo}#${r.issue_number}` : "(pending)";
   const when = r.completed_at ?? r.started_at;
 
   return (
-    // Stretched-link pattern: the Card is the visual container, the Link's
-    // ::after pseudo-element covers it so the whole row feels clickable, and
-    // the GitHub external-link sits on z-10 so its click wins. Avoids the
-    // invalid <a> inside <a> nesting that wrapping the whole Card would
-    // produce.
-    <Card className="relative border-border transition-colors hover:border-primary/40 group">
-      <CardContent className="flex items-center gap-4 p-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2 text-sm font-medium">
-            <Link
-              href={`/investigations/${r.id}`}
-              className="truncate group-hover:text-primary transition-colors after:absolute after:inset-0"
+    // Stretched-link pattern: the Link's ::after covers the row so the whole
+    // thing is clickable; the GitHub external-link sits on z-10 so its click
+    // wins — avoids invalid <a> inside <a> nesting.
+    <div className="group relative flex items-stretch gap-4 border-b border-border px-5 py-4 transition-colors last:border-0 hover:bg-accent/40">
+      <span
+        className={`w-1 shrink-0 rounded-full ${RAIL[r.status] ?? RAIL.queued}`}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <Link
+            href={`/investigations/${r.id}`}
+            className="truncate font-heading text-base font-medium transition-colors after:absolute after:inset-0 group-hover:text-primary"
+          >
+            {title}
+          </Link>
+          {r.issue_url && (
+            <a
+              href={r.issue_url}
+              target="_blank"
+              rel="noreferrer"
+              className="relative z-10 text-muted-foreground transition-colors hover:text-foreground"
+              aria-label="Open issue on GitHub"
             >
-              {title}
-            </Link>
-            {r.issue_url && (
-              <a
-                href={r.issue_url}
-                target="_blank"
-                rel="noreferrer"
-                className="relative z-10 text-muted-foreground hover:text-foreground"
-                aria-label="Open issue on GitHub"
-              >
-                <ExternalLink className="size-3" />
-              </a>
-            )}
-          </div>
-          {when && (
-            <p className="mt-0.5 text-xs text-muted-foreground font-mono">
-              {new Date(when).toUTCString().replace(" GMT", "")}
-            </p>
-          )}
-          {r.error && (
-            <p className="mt-1 text-xs text-rose-500/90 truncate max-w-xl">
-              {r.error}
-            </p>
+              <ExternalLink className="size-3.5" />
+            </a>
           )}
         </div>
+        {when && (
+          <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+            {new Date(when).toUTCString().replace(" GMT", "")}
+          </p>
+        )}
+        {r.error && (
+          <p className="mt-1 max-w-xl truncate text-xs text-destructive/90">
+            {r.error}
+          </p>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
         <StatusBadge status={r.status} />
-      </CardContent>
-    </Card>
+        <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+      </div>
+    </div>
   );
 }
 
