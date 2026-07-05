@@ -213,6 +213,8 @@ def init_db(engine: Engine | None = None) -> None:
             _widen_bigint_columns(conn)
         for stmt in (VEC_TABLES_SQL_PG if is_pg else VEC_TABLES_SQL):
             conn.exec_driver_sql(stmt)
+        if is_pg:
+            _ensure_pg_vec_dim(conn)
     log.info("db_initialized", url=str(eng.url), dialect=eng.dialect.name)
 
 
@@ -333,6 +335,53 @@ def _widen_bigint_columns(conn) -> None:
                 f'FOREIGN KEY ("{column}") REFERENCES "{ref_table}" ("{ref_column}") '
                 f"ON DELETE CASCADE"
             )
+
+
+def _ensure_pg_vec_dim(conn) -> None:
+    """Postgres-only: rebuild pgvector tables whose dimension no longer matches
+    the configured embedder.
+
+    The vec tables are created `vector(embedder_dim)` — 384 for the local
+    backend, 1024 for Voyage. `CREATE TABLE IF NOT EXISTS` never resizes an
+    existing table, so switching EMBEDDER_BACKEND (local↔voyage) leaves a
+    stale dimension and every insert fails with "expected N dimensions".
+
+    A dimension change invalidates all cached embeddings anyway, so dropping
+    and recreating these (regenerable) tables is the correct, safe response.
+    Idempotent: no-ops once the dimensions already match.
+    """
+    import re
+
+    from sqlalchemy import text
+
+    want = settings.embedder_dim
+    # VEC_TABLES_SQL_PG is [user_skills_vec, issues_vec] — same order here.
+    specs = {
+        "user_skills_vec": VEC_TABLES_SQL_PG[0],
+        "issues_vec": VEC_TABLES_SQL_PG[1],
+    }
+    for table, create_sql in specs.items():
+        row = conn.execute(
+            text(
+                "SELECT format_type(a.atttypid, a.atttypmod) "
+                "FROM pg_attribute a JOIN pg_class c ON a.attrelid = c.oid "
+                "WHERE c.relname = :t AND a.attname = 'embedding'"
+            ),
+            {"t": table},
+        ).first()
+        if row is None or not row[0]:
+            continue  # table/column not present yet
+        m = re.search(r"\((\d+)\)", row[0])  # 'vector(384)' -> 384
+        if not m:
+            continue
+        current = int(m.group(1))
+        if current == want:
+            continue
+        conn.exec_driver_sql(f"DROP TABLE IF EXISTS {table}")
+        conn.exec_driver_sql(create_sql)
+        log.warning(
+            "db_vec_table_rebuilt", table=table, old_dim=current, new_dim=want
+        )
 
 
 def reset_db(engine: Engine | None = None) -> None:
