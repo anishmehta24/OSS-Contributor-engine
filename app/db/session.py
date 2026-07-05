@@ -209,6 +209,8 @@ def init_db(engine: Engine | None = None) -> None:
             conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector")
         Base.metadata.create_all(conn)
         _add_missing_columns(conn)
+        if is_pg:
+            _widen_bigint_columns(conn)
         for stmt in (VEC_TABLES_SQL_PG if is_pg else VEC_TABLES_SQL):
             conn.exec_driver_sql(stmt)
     log.info("db_initialized", url=str(eng.url), dialect=eng.dialect.name)
@@ -259,6 +261,77 @@ def _add_missing_columns(conn) -> None:
             log.warning(
                 "db_auto_added_column",
                 table=table.name, column=col.name, type=str(col_type),
+            )
+
+
+def _widen_bigint_columns(conn) -> None:
+    """Postgres-only: widen GitHub-ID columns from INTEGER (int4) to BIGINT.
+
+    GitHub's numeric IDs (user/repo/issue) now exceed 2^31, which overflows
+    Postgres INTEGER — an Issue Hunter run 500s with "integer out of range".
+    SQLite's INTEGER is already 64-bit, so this only matters on Postgres.
+
+    `create_all` never retypes an existing column, so a DB created before the
+    models were corrected keeps the old int4 columns. This migration fixes
+    them in place: drop the coupling FKs, widen every target column, re-add
+    the FKs. Idempotent — no-ops once everything is already BIGINT.
+    """
+    from sqlalchemy import inspect as sa_inspect
+
+    # (table, column) pairs that store a GitHub numeric ID.
+    targets = [
+        ("users", "github_id"),
+        ("repos", "id"),
+        ("issues", "id"),
+        ("issues", "repo_id"),
+        ("investigations", "issue_id"),
+    ]
+    # FK columns whose int type is coupled to a target PK — Postgres rejects a
+    # type change that leaves the pair mismatched, so drop then recreate.
+    # (table, column, ref_table, ref_column) — all ON DELETE CASCADE per models.
+    fks = [
+        ("issues", "repo_id", "repos", "id"),
+        ("investigations", "issue_id", "issues", "id"),
+    ]
+
+    inspector = sa_inspect(conn)
+    existing = set(inspector.get_table_names())
+
+    def needs_widen(table: str, column: str) -> bool:
+        if table not in existing:
+            return False
+        col = next(
+            (c for c in inspector.get_columns(table) if c["name"] == column), None
+        )
+        return col is not None and "BIGINT" not in str(col["type"]).upper()
+
+    if not any(needs_widen(t, c) for t, c in targets):
+        return  # already migrated — fast path on every subsequent boot
+
+    dropped: set[tuple[str, str]] = set()
+    for table, column, _rt, _rc in fks:
+        if table not in existing:
+            continue
+        for fk in inspector.get_foreign_keys(table):
+            if column in fk.get("constrained_columns", []) and fk.get("name"):
+                conn.exec_driver_sql(
+                    f'ALTER TABLE "{table}" DROP CONSTRAINT "{fk["name"]}"'
+                )
+                dropped.add((table, column))
+
+    for table, column in targets:
+        if needs_widen(table, column):
+            conn.exec_driver_sql(
+                f'ALTER TABLE "{table}" ALTER COLUMN "{column}" TYPE BIGINT'
+            )
+            log.warning("db_widened_to_bigint", table=table, column=column)
+
+    for table, column, ref_table, ref_column in fks:
+        if (table, column) in dropped:
+            conn.exec_driver_sql(
+                f'ALTER TABLE "{table}" ADD CONSTRAINT "{table}_{column}_fkey" '
+                f'FOREIGN KEY ("{column}") REFERENCES "{ref_table}" ("{ref_column}") '
+                f"ON DELETE CASCADE"
             )
 
 

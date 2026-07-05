@@ -14,7 +14,17 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -50,7 +60,8 @@ class User(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     github_login: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
-    github_id: Mapped[int] = mapped_column(unique=True, index=True, nullable=False)
+    # BigInteger: GitHub's numeric IDs exceed 2^31 (Postgres INTEGER max).
+    github_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True, nullable=False)
     name: Mapped[str | None] = mapped_column(String(128))
 
     skill: Mapped[UserSkill | None] = relationship(
@@ -92,7 +103,8 @@ class Repo(Base, TimestampMixin):
     __tablename__ = "repos"
 
     # Use GitHub's numeric id as the PK so we can upsert cleanly.
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    # BigInteger: GitHub repo IDs exceed 2^31 (Postgres INTEGER max).
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     full_name: Mapped[str] = mapped_column(String(256), unique=True, index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
@@ -125,9 +137,10 @@ class Issue(Base, TimestampMixin):
         Index("ix_issue_state_difficulty", "state", "difficulty"),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)  # GitHub's id
+    # BigInteger: GitHub issue IDs exceed 2^31 (Postgres INTEGER max).
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)  # GitHub's id
     repo_id: Mapped[int] = mapped_column(
-        ForeignKey("repos.id", ondelete="CASCADE"), nullable=False, index=True
+        BigInteger, ForeignKey("repos.id", ondelete="CASCADE"), nullable=False, index=True
     )
     number: Mapped[int] = mapped_column(nullable=False)
     title: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -160,7 +173,7 @@ class Investigation(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     issue_id: Mapped[int] = mapped_column(
-        ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
+        BigInteger, ForeignKey("issues.id", ondelete="CASCADE"), nullable=False, index=True
     )
     status: Mapped[str] = mapped_column(String(16), default="queued", nullable=False, index=True)
     # queued | running | completed | failed
