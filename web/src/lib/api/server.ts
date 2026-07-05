@@ -25,7 +25,13 @@ import type {
 } from "./types";
 
 const SESSION_COOKIE = "oss_engine_session";
-const FASTAPI_URL = process.env.FASTAPI_URL ?? "http://localhost:8000";
+// Strip any trailing slash so `new URL("auth/me", `${FASTAPI_URL}/`)` never
+// yields a double-slash path (`...onrender.com//auth/me`), which FastAPI 404s
+// on. The Next.js rewrite in next.config.ts does the same — keep them in sync.
+const FASTAPI_URL = (process.env.FASTAPI_URL ?? "http://localhost:8000").replace(
+  /\/+$/,
+  "",
+);
 
 type FetchOpts = {
   /** Pass `false` to send the request without cookies (e.g., public health check). */
