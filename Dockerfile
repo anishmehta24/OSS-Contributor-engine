@@ -42,13 +42,20 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
 # --no-dev: skip pytest/ruff/respx. NO --extra local-embeddings: skip torch.
+# --no-install-project: install ONLY dependencies here. The project itself is a
+# package (hatchling), so installing it now would fail — its `app/` source
+# isn't copied until below. Installing deps separately also keeps this layer
+# cached across code edits.
 # -v: surface the actual failing package + reason in the build log when a
 # wheel falls back to source and that source build fails. Without it Render
 # only shows uv's generic "Build failures" hint, which isn't actionable.
-RUN uv sync --frozen --no-dev -v
+RUN uv sync --frozen --no-dev --no-install-project -v
 
 # App code
 COPY app ./app
+
+# Source is present now — install the project itself (fast; deps are cached).
+RUN uv sync --frozen --no-dev -v
 
 # Render injects $PORT; default to 8000 for local `docker run` parity.
 ENV PORT=8000
