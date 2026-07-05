@@ -39,15 +39,15 @@ export default async function InvestigationsListPage({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
-      <header className="mb-6">
-        <p className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+      <header className="mb-6 border-b border-border pb-6">
+        <p className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
           <Microscope className="size-3.5" />
           Investigations
         </p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">
+        <h1 className="mt-3 text-3xl font-medium sm:text-4xl">
           Your investigation history
         </h1>
-        <p className="mt-2 max-w-2xl text-muted-foreground">
+        <p className="mt-3 max-w-2xl text-muted-foreground">
           Every issue you&apos;ve sent through the multi-agent investigator,
           newest first. Pick one to see the full report or stream a run in
           progress live.
@@ -55,7 +55,7 @@ export default async function InvestigationsListPage({
       </header>
 
       {/* Status filter — small tabs */}
-      <div className="mb-4 inline-flex rounded-lg border border-border/60 bg-muted/30 p-1">
+      <div className="mb-4 inline-flex rounded-lg border border-border bg-muted/30 p-1">
         {STATUS_FILTERS.map((s) => {
           const active = s === status;
           const count = s === "all" ? all.length : all.filter((r) => r.status === s).length;
@@ -102,7 +102,7 @@ function InvestigationRowCard({ r }: { r: InvestigationRow }) {
     // the GitHub external-link sits on z-10 so its click wins. Avoids the
     // invalid <a> inside <a> nesting that wrapping the whole Card would
     // produce.
-    <Card className="relative border-border/60 transition-colors hover:border-primary/40 group">
+    <Card className="relative border-border transition-colors hover:border-primary/40 group">
       <CardContent className="flex items-center gap-4 p-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 text-sm font-medium">
@@ -150,7 +150,7 @@ function EmptyState({
 }) {
   if (hasAny && status !== "all") {
     return (
-      <Card className="border-border/60">
+      <Card className="border-border">
         <CardHeader className="space-y-2">
           <CardTitle className="text-lg">
             No <span className="capitalize">{status}</span> investigations
@@ -167,7 +167,7 @@ function EmptyState({
     );
   }
   return (
-    <Card className="border-border/60">
+    <Card className="border-border">
       <CardHeader className="space-y-3 text-center">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <Search className="size-6" />

@@ -22,11 +22,14 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10">
       {/* Hero greeting */}
-      <header className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          Hi, {greetName} 👋
+      <header className="mb-8 border-b border-border pb-6">
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+          Dashboard
+        </p>
+        <h1 className="mt-3 text-3xl font-medium sm:text-4xl">
+          Hi, {greetName}.
         </h1>
-        <p className="mt-1 text-muted-foreground">
+        <p className="mt-2 text-muted-foreground">
           A quick look at where things stand.
         </p>
       </header>
@@ -53,7 +56,7 @@ export default async function DashboardPage() {
 
 function CardSkeleton({ tall = false }: { tall?: boolean }) {
   return (
-    <div className="rounded-lg border border-border/60 p-6 space-y-3">
+    <div className="rounded-xl border border-border p-6 space-y-3">
       <Skeleton className="h-3.5 w-24" />
       <Skeleton className="h-6 w-40" />
       <div className="space-y-2 pt-2">

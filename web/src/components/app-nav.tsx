@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { GitPullRequestArrow } from "lucide-react";
 import type { Me } from "@/lib/api/types";
+import { GitHubIcon } from "@/components/icons";
 import { NavLinks } from "@/components/nav-links";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { MobileNav } from "@/components/mobile-nav";
+
+const GITHUB_URL = "https://github.com/anishmehta24/OSS-Contributor-engine";
 
 /**
  * Top navigation for authenticated pages.
@@ -34,6 +37,15 @@ export function AppNav({ me }: { me: Me }) {
 
         {/* Right side */}
         <div className="flex items-center gap-1">
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noreferrer"
+            title="View source on GitHub"
+            className="hidden h-9 w-9 place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground sm:grid"
+          >
+            <GitHubIcon className="h-[18px] w-[18px]" />
+          </a>
           <ThemeToggle />
           <div className="hidden md:block">
             <UserMenu me={me} />

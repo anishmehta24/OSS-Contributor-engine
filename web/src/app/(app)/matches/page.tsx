@@ -51,15 +51,16 @@ export default async function MatchesPage({
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
       {/* Header */}
-      <header className="mb-6">
-        <p className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+      <header className="mb-6 border-b border-border pb-6">
+        <p className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
           <Search className="size-3.5" />
-          Issues that match
+          Matches
         </p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-          Ranked by skill fit and repo health
+        <h1 className="mt-3 text-3xl font-medium sm:text-4xl">
+          Ranked by <span className="italic text-primary">skill fit</span> and
+          repo health
         </h1>
-        <p className="mt-2 max-w-2xl text-muted-foreground">
+        <p className="mt-3 max-w-2xl text-muted-foreground">
           We pull from the issue pool the Hunter has populated, embed your
           profile against each one, and rank by skill match, repo health,
           freshness, difficulty fit, and impact.
@@ -67,7 +68,7 @@ export default async function MatchesPage({
       </header>
 
       {/* Controls */}
-      <div className="mb-6 flex flex-col gap-4 rounded-lg border border-border/60 bg-muted/20 p-4">
+      <div className="mb-6 flex flex-col gap-4 rounded-xl border border-border bg-muted/30 p-4">
         <ModeToggle current={mode} />
         <FilterBar filters={filters} />
         {mode === "gsoc" && (
@@ -129,7 +130,7 @@ function MatchListSkeleton({ count }: { count: number }) {
   return (
     <div className="space-y-3">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-lg border border-border/60 p-5 space-y-3">
+        <div key={i} className="rounded-xl border border-border p-5 space-y-3">
           <div className="flex items-center gap-3">
             <Skeleton className="h-4 w-8" />
             <Skeleton className="h-4 w-48" />
@@ -149,7 +150,7 @@ function MatchListSkeleton({ count }: { count: number }) {
 
 function NoProfileEmpty() {
   return (
-    <Card className="border-border/60">
+    <Card className="border-border">
       <CardHeader className="space-y-3 text-center">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <Sparkles className="size-6" />
@@ -171,7 +172,7 @@ function NoProfileEmpty() {
 
 function NoMatchesEmpty({ mode }: { mode: "general" | "gsoc" }) {
   return (
-    <Card className="border-border/60">
+    <Card className="border-border">
       <CardHeader className="space-y-2">
         <CardTitle className="text-lg">No matches yet</CardTitle>
         <CardDescription>
@@ -181,11 +182,12 @@ function NoMatchesEmpty({ mode }: { mode: "general" | "gsoc" }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="text-sm text-muted-foreground">
-        Run the Issue Hunter to backfill the pool:
-        <pre className="mt-3 rounded-md bg-muted px-3 py-2 text-xs font-mono">
+        An admin needs to run the Issue Hunter to backfill the pool
+        {mode === "gsoc" ? " for GSoC orgs" : ""}:
+        <pre className="mt-3 overflow-x-auto rounded-md bg-muted px-3 py-2 text-xs font-mono">
           {mode === "gsoc"
-            ? "python -m app.workers hunt --mode gsoc"
-            : "python -m app.workers hunt"}
+            ? 'POST /admin/hunt  {"mode":"gsoc"}'
+            : 'POST /admin/hunt  {"mode":"general"}'}
         </pre>
       </CardContent>
     </Card>
