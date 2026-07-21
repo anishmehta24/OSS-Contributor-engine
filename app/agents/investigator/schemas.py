@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 EffortEstimate = Literal["under-1-hour", "few-hours", "weekend", "multi-day"]
 
@@ -58,12 +58,27 @@ class InvestigationReport(BaseModel):
     """Synthesizer output — the report a developer would actually read."""
     model_config = ConfigDict(extra="ignore")
 
-    issue_summary: str
+    issue_summary: str = ""
     candidate_files: list[CandidateFile] = Field(default_factory=list)
-    suggested_approach: str = Field(default="", max_length=1500)
+    # No max_length here: an over-long value shouldn't fail validation (that
+    # would drop the whole report). The validator caps it instead.
+    suggested_approach: str = ""
     open_questions: list[str] = Field(default_factory=list, max_length=6)
     risks: list[str] = Field(default_factory=list, max_length=6)
     estimated_effort: EffortEstimate = "few-hours"
+
+    @field_validator("issue_summary", "suggested_approach", mode="before")
+    @classmethod
+    def _coerce_text(cls, v: object) -> str:
+        """LLMs sometimes return these fields as a JSON array of paragraphs or
+        bullet points instead of a single string. Join a list into one markdown
+        string and cap the length, so a well-formed answer in the "wrong" shape
+        doesn't fail validation and blank the whole report."""
+        if v is None:
+            return ""
+        if isinstance(v, (list, tuple)):
+            v = "\n".join(str(item).strip() for item in v if str(item).strip())
+        return str(v)[:4000]
 
 
 class InvestigationResult(BaseModel):
