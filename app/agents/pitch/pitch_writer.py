@@ -102,7 +102,8 @@ def run_pitch_writer(
         investigation_id=investigation_id,
         user_id=user_id,
         session=session,
-        max_tokens=600,
+        # Headroom so Gemini's thinking tokens don't truncate the JSON.
+        max_tokens=1800,
     )
     if parsed is None:
         log.warning(

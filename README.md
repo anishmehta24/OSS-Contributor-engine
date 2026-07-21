@@ -1,8 +1,8 @@
 # OSS Contributor Engine
 
-A multi-agent system that **profiles your GitHub skills, hunts matching open-source issues, investigates them end-to-end, and drafts a contribution comment you'd actually feel good posting.**
+A multi-agent system that **profiles your GitHub skills, hunts matching open-source issues, investigates them end-to-end, drafts a contribution comment — and can autonomously write the fix and open the pull request for you.**
 
-Built batch-by-batch as a portfolio project. Five specialist agents collaborate: Skill Profiler → Issue Hunter → Triager → Investigator (itself a crew of four sub-agents) → Pitch Writer.
+Built batch-by-batch as a portfolio project. Specialist agents collaborate across two phases: **discovery** — Skill Profiler → Issue Hunter → Triager → Investigator (a crew of four sub-agents) → Pitch Writer — and **contribution** — the **Autonomous Pilot** (Code Explorer → Patch Writer → Test Runner → Reviewer) which patches the code in a Docker sandbox and opens a PR. A **Direct Pilot** entry point lets you skip discovery and point the pilot straight at any GitHub issue URL.
 
 ## Stack
 
@@ -82,6 +82,13 @@ Then open `http://localhost:3000` → click **Sign in with GitHub** → land on 
 4. Go to `/matches` → ranked candidate issues from the Hunter pool. Toggle **🎓 GSoC** to restrict to orgs that have shipped GSoC projects in the last 3 years. Each card shows a score breakdown (skill / health / freshness / difficulty / impact) and a `why-it-fits` line.
 5. Click **Investigate** on any match → routes to `/investigations/<id>` with a **live SSE timeline**: data fetch → Issue Analyst → Repo Mapper → History Detective → Synthesizer.
 6. When the run completes, the **markdown report** and a **per-agent cost table** appear inline. Click **Draft pitch** → the Pitch Writer agent produces a tone-guarded comment you can copy-paste straight into the GitHub issue.
+7. Click **Start Autonomous Pilot** → the Pilot Coordinator clones the repo into a Docker sandbox, the **Code Explorer** picks candidate files, and a **Reviewer loop** runs **Patch Writer → Test Runner** (up to N attempts). You review the resulting diff, then **Push** and **Open PR** — all on your own GitHub token.
+
+### Direct Pilot — skip straight to the fix
+
+Don't want to run the whole discovery pipeline? Open the **Direct Pilot** tab (`/direct-pilot`), paste a GitHub issue URL (`https://github.com/owner/repo/issues/123`, `owner/repo/issues/123`, or `owner/repo#123`), and hit **Start pilot**. It fetches the issue + repo, runs the same patch → review → push → PR flow, and opens a pull request. Handy for demos and for targeting a specific issue you already have in mind.
+
+> Notes: the Pilot needs Docker (run locally — it's disabled on free hosted tiers). The Test Runner runs real tests for **Python** projects; for **JS/TS/Go/Rust** it accepts the applied patch with a "tests not run — review the diff" caveat so the flow still reaches a PR.
 
 ## Architecture cheat-sheet
 
@@ -109,12 +116,34 @@ Then open `http://localhost:3000` → click **Sign in with GitHub** → land on 
                    │                  │ │ Synthesizer  │
                    │                  │ └──────────────┘
                    └────────┬─────────┘
-                            │ markdown_report
-                            │
-                   ┌────────▼─────────┐
-                   │   Pitch Writer   │  draft comment, copy-paste-ready
-                   └──────────────────┘
+                            │ markdown_report → investigation completed
+                 ┌──────────┴───────────┐
+                 │                      │
+        ┌────────▼─────────┐   ┌────────▼──────────┐
+        │   Pitch Writer   │   │  Autonomous Pilot │ ◄─ Direct Pilot: paste a
+        │  draft comment   │   │  (Docker sandbox) │    GitHub issue URL and
+        └──────────────────┘   └────────┬──────────┘    skip straight to here
+                                        │ shallow-clones the repo
+                               ┌────────▼──────────┐
+                               │   Code Explorer   │  picks candidate files
+                               └────────┬──────────┘
+                                        │
+                               ┌────────▼──────────┐   ┌──────────────┐
+                               │   Reviewer loop   │──▶│ Patch Writer │
+                               │  ×N: accept /     │◀──│ Test Runner  │
+                               │  retry / give_up  │   └──────────────┘
+                               └────────┬──────────┘
+                                        │ accepted diff (human reviews it)
+                               ┌────────▼──────────┐
+                               │   Push → Open PR  │  fork, push a branch,
+                               │  (user's token)   │  open the pull request
+                               └───────────────────┘
 ```
+
+**Two entry points into the Pilot:** the normal flow reaches it from a
+**completed investigation**; **Direct Pilot** (`/direct-pilot`) lets you paste a
+GitHub issue URL and run the pilot straight away, skipping hunt → match →
+investigate. Both share the same review → push → PR machinery.
 
 ## CLI reference
 
@@ -165,9 +194,9 @@ proj1/
 └── docs/                  (TBD — internal plans live here)
 ```
 
-## Roadmap (v3)
+## v3 — Autonomous Contribution Pilot (built)
 
-Next major direction — the **Autonomous Contribution Pilot**. Stops at "draft a comment" today; v3 takes it through actually **submitting the contribution**: forks the repo, writes a patch in a sandboxed Docker workspace, runs the project's test suite against it, opens a draft PR via the user's OAuth token. New agents: Code Explorer, Patch Writer, Test Runner, Reviewer, PR Submitter. Human-in-the-loop approval gate before any PR is opened.
+The engine no longer stops at "draft a comment" — the **Autonomous Contribution Pilot** takes it through **submitting the contribution**: it forks the repo, writes a patch in a sandboxed Docker workspace, runs the project's test suite against it, and opens a PR via the user's OAuth token. Agents: Code Explorer, Patch Writer, Test Runner, Reviewer, plus the push/PR steps. There's a human-in-the-loop review of the diff before any PR is opened. A **Direct Pilot** entry point (`/direct-pilot`) runs the whole thing from a pasted issue URL.
 
 ### v3 setup (additional)
 

@@ -114,7 +114,8 @@ def run_repo_mapper(
         response_model=RepoMap,
         investigation_id=investigation_id,
         session=session,
-        max_tokens=1200,
+        # Headroom so Gemini's thinking tokens don't truncate the JSON.
+        max_tokens=2500,
     )
     if parsed is None:
         log.warning("repo_mapper_parse_failed", repo=repo_full_name)

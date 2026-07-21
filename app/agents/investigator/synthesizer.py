@@ -107,7 +107,11 @@ def run_synthesizer(
         response_model=InvestigationReport,
         investigation_id=investigation_id,
         session=session,
-        max_tokens=2000,
+        # Headroom: the full report (summary + candidate files + approach +
+        # questions) plus Gemini 2.5 Flash's "thinking" tokens can blow past a
+        # tight budget, truncating the JSON mid-object -> parse fails and the
+        # user sees "(synthesis failed)". 6000 leaves room for both.
+        max_tokens=6000,
     )
     if parsed is None:
         log.warning("synthesizer_parse_failed", repo=repo_full_name, issue=issue_number)

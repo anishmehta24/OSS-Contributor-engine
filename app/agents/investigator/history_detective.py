@@ -74,7 +74,8 @@ def run_history_detective(
         response_model=HistoricalContext,
         investigation_id=investigation_id,
         session=session,
-        max_tokens=800,
+        # Headroom so Gemini's thinking tokens don't truncate the JSON.
+        max_tokens=2000,
     )
     if parsed is None:
         log.warning("history_detective_parse_failed")

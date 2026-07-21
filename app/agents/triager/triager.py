@@ -143,7 +143,9 @@ def attach_why_fits(
         response_model=_WhyOutput,
         session=session,
         user_id=user_id,
-        max_tokens=600,
+        # One "why it fits" line per issue (up to 10) + Gemini thinking tokens
+        # overran 600 and truncated the JSON. Give it room.
+        max_tokens=2000,
     )
     if parsed is None:
         return  # leave why_it_fits as None on parse failure

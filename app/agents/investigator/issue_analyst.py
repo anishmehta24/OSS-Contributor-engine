@@ -81,7 +81,8 @@ def run_issue_analyst(
         response_model=IssueRequirements,
         investigation_id=investigation_id,
         session=session,
-        max_tokens=1200,
+        # Headroom so Gemini's thinking tokens don't truncate the JSON.
+        max_tokens=2500,
     )
     if parsed is None:
         log.warning("issue_analyst_parse_failed", title=title[:80])
