@@ -91,12 +91,20 @@ async def run_tests(
         )
 
     if info.language != "python":
+        # We can't run this language's test suite yet (the sandbox runner is
+        # Python-only), but the patch already applied cleanly to a real,
+        # recognized project. Classify as needs_env — the same "syntax was
+        # fine, tests just couldn't run" bucket Python uses — so the Reviewer
+        # ACCEPTS with a caveat instead of giving up. A human still reviews the
+        # diff before it becomes a PR, so we're not merging anything blind.
         return TestRunResult(
             language=info.language,
-            classification="no_project",
+            classification="needs_env",
             summary=(
-                f"{info.language!r} projects aren't supported yet "
-                "(Python only in this batch)."
+                f"Patch applied to a {info.language} project "
+                f"(detected {info.marker or 'project marker'}). Automated "
+                "tests weren't run — the sandbox runner supports Python only "
+                "for now — so review the diff before merging."
             ),
             phases=[],
             duration_s=time.monotonic() - started,

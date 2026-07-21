@@ -13,17 +13,20 @@ running two LLM-driven write loops on the same workspace would race.
 from __future__ import annotations
 
 import json
+import re
 import uuid
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import RouterDep, SessionDep
+from app.api.dependencies import RouterDep, SessionDep, UserGHDep
 from app.auth.dependencies import CurrentUserDep
 from app.core.config import settings
-from app.db.models import Investigation, PilotRun, User
+from app.db.models import Investigation, Issue, PilotRun, Repo, User
 from app.db.session import sessionmaker_factory
 from app.jobs import spawn
 from app.pilot import (
@@ -38,6 +41,8 @@ from app.pilot import (
     push_pilot_branch,
     run_pilot,
 )
+from app.tools.github import GitHubClient
+from app.workers.issue_hunter import upsert_issue, upsert_repo
 
 log = structlog.get_logger(__name__)
 
@@ -187,6 +192,169 @@ async def create_pilot(
         pilot_id=pilot_id, investigation_id=investigation_id, user_id=me.id,
     )
     return CreatePilotResponse(pilot_id=pilot_id, status="queued")
+
+
+# ---------------------------------------------------------------------------
+# Direct Pilot — start straight from a pasted issue URL (skips hunt/investigate)
+# ---------------------------------------------------------------------------
+
+# Accepts any of:
+#   https://github.com/owner/repo/issues/123
+#   github.com/owner/repo/issues/123
+#   owner/repo/issues/123
+#   owner/repo#123
+_ISSUE_URL_RE = re.compile(
+    r"(?:https?://)?(?:www\.)?(?:github\.com/)?"
+    r"(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+?)"
+    r"(?:/issues/|#)(?P<number>\d+)"
+)
+
+
+class DirectPilotRequest(BaseModel):
+    issue_url: str
+    config: PilotConfig | None = None
+
+
+class CreateDirectPilotResponse(BaseModel):
+    investigation_id: str
+    pilot_id: str
+    status: str = "queued"
+    repo: str
+    issue_number: int
+
+
+def _parse_issue_url(raw: str) -> tuple[str, int]:
+    """Return ('owner/repo', number) from a GitHub issue URL/shorthand, else 422."""
+    m = _ISSUE_URL_RE.search((raw or "").strip())
+    if not m:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Couldn't parse a GitHub issue from that input. Use a URL like "
+                "https://github.com/owner/repo/issues/123 or owner/repo#123."
+            ),
+        )
+    repo = m.group("repo")
+    repo = repo[:-4] if repo.endswith(".git") else repo
+    return f"{m.group('owner')}/{repo}", int(m.group("number"))
+
+
+@router.post(
+    "/from-url",
+    response_model=CreateDirectPilotResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def create_pilot_from_url(
+    body: DirectPilotRequest,
+    request: Request,
+    me: User = CurrentUserDep,
+    session: Session = SessionDep,
+    router_=RouterDep,
+    gh: GitHubClient = UserGHDep,
+) -> CreateDirectPilotResponse:
+    """Start an Autonomous Pilot directly from a pasted GitHub issue URL.
+
+    Skips the hunt → match → investigate chain: fetches the issue + repo,
+    persists a minimal 'completed' Investigation to hang the pilot off of (so
+    the existing status / push / PR endpoints keep working unchanged), then
+    queues the pilot. Useful for demos where you want to target a specific,
+    known-simple issue you control.
+    """
+    if not settings.pilot_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Autonomous Pilot is disabled in this deployment — it needs a "
+                "Docker sandbox and persistent disk. Run locally to use it."
+            ),
+        )
+
+    full_name, number = _parse_issue_url(body.issue_url)
+
+    # Cost cap — fail before spending LLM budget.
+    exceeded, spent, cap = cost_cap_exceeded(session, me.id)
+    if exceeded:
+        raise HTTPException(
+            status_code=402,
+            detail=(
+                f"LLM cost cap reached (${spent:.4f} spent / ${cap:.2f} cap). "
+                f"Raise MAX_USER_COST_USD to continue."
+            ),
+        )
+
+    # Refuse-list — don't fork/push/PR against opted-out maintainers.
+    if is_repo_refused(full_name):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"{full_name} is on the pilot refuse-list — its maintainers "
+                f"have opted out of AI-generated contributions."
+            ),
+        )
+
+    # Fetch the repo + issue from GitHub using the user's token.
+    try:
+        gh_repo = await gh.get_repo(full_name)
+        gh_issue = await gh.get_issue(full_name, number)
+    except Exception as e:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Couldn't fetch {full_name}#{number} from GitHub: {e}",
+        ) from e
+
+    # Persist repo + issue (reuse the hunter's upserts), then a minimal
+    # completed investigation the pilot can attach to.
+    repo_row = upsert_repo(session, gh_repo)
+    issue_row = upsert_issue(session, repo_row.id, gh_issue, difficulty=None)
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+    inv_id = str(uuid.uuid4())
+    session.add(Investigation(
+        id=inv_id,
+        user_id=me.id,
+        issue_id=issue_row.id,
+        status="completed",
+        report_md=(
+            f"# Direct Pilot\n\nStarted directly from {gh_issue.html_url}\n\n"
+            f"**{gh_issue.title}**"
+        ),
+        started_at=now,
+        completed_at=now,
+    ))
+    session.commit()
+
+    # Queue the pilot — identical machinery to the normal create_pilot path.
+    pilot_id = str(uuid.uuid4())
+    session.add(PilotRun(
+        id=pilot_id, investigation_id=inv_id, user_id=me.id, status="queued",
+    ))
+    session.commit()
+
+    session_factory = getattr(
+        request.app.state, "session_factory", None,
+    ) or sessionmaker_factory()
+
+    cfg = body.config or PilotConfig()
+    spawn(
+        _run_pilot_background(
+            pilot_id, inv_id, me.id,
+            llm_router=router_,
+            session_factory=session_factory,
+            config=cfg,
+        ),
+        name=f"pilot:{pilot_id[:8]}",
+    )
+    log.info(
+        "direct_pilot_queued",
+        pilot_id=pilot_id, investigation_id=inv_id,
+        repo=full_name, issue=number, user_id=me.id,
+    )
+    return CreateDirectPilotResponse(
+        investigation_id=inv_id,
+        pilot_id=pilot_id,
+        repo=full_name,
+        issue_number=number,
+    )
 
 
 @router.get(

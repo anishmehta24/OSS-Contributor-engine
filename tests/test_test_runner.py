@@ -192,18 +192,23 @@ async def test_no_project_when_no_markers(tmp_path):
 
 
 @pytest.mark.unit
-async def test_non_python_language_returns_no_project(tmp_path):
+async def test_non_python_language_accepts_with_caveat(tmp_path):
+    """A detected-but-unsupported language (JS/TS/Go/Rust) shouldn't make the
+    pilot give up. The patch already applied to a real project, so we classify
+    needs_env (→ Reviewer accepts with a 'tests not run' caveat) rather than
+    no_project (→ give up)."""
     ws = Workspace(investigation_id="inv-js", host_path=tmp_path)
     repo = tmp_path / "node-thing"
     repo.mkdir()
     (repo / "package.json").write_text('{"name":"x"}', encoding="utf-8")
     runner = _FakeRunner([])
     result = await run_tests(ws, repo, runner=runner)
-    assert result.classification == "no_project"
+    assert result.classification == "needs_env"
     assert result.language == "javascript"
     assert "javascript" in result.summary
-    # Honest "not supported yet" message.
-    assert "supported yet" in result.summary or "Python only" in result.summary
+    # Honest "tests weren't run" caveat so the PR body / UI can surface it.
+    assert "review the diff" in result.summary or "weren't run" in result.summary
+    assert runner.calls == []  # never tried to run anything
 
 
 @pytest.mark.unit
