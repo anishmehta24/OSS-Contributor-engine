@@ -35,6 +35,11 @@ MAX_REPOS_TO_ANALYZE = 15
 RECENT_COMMITS_PER_REPO = 8
 TOP_LANGUAGES = 10
 TOP_FRAMEWORKS = 20
+# Max concurrent GitHub calls while collecting repo signals. Each repo needs
+# ~11 calls (languages + 9 manifests + commits); running them sequentially for
+# 15 repos took ~60s and timed out the browser. Bounded concurrency keeps us
+# fast without tripping GitHub's secondary rate limits.
+_SIGNAL_CONCURRENCY = 8
 
 
 # ---------------------------------------------------------------------------
@@ -63,61 +68,89 @@ def aggregate_frameworks(signals: list[RepoSignal]) -> list[str]:
 # GitHub fetching
 # ---------------------------------------------------------------------------
 
+async def _collect_one_repo(gh: GitHubClient, repo) -> RepoSignal:
+    """Fetch all signals for a single repo. Manifest lookups run concurrently."""
+    # Languages
+    try:
+        languages = await gh.get_repo_languages(repo.full_name)
+    except Exception as e:
+        log.warning("languages_fetch_failed", repo=repo.full_name, error=str(e))
+        languages = {}
+
+    # Manifests — fetch all candidates concurrently; missing ones 404.
+    async def _fetch_manifest(filename: str) -> str | None:
+        try:
+            return await gh.get_repo_file(repo.full_name, filename)
+        except NotFoundError:
+            return None
+        except Exception as e:
+            log.warning(
+                "manifest_fetch_failed",
+                repo=repo.full_name, file=filename, error=str(e),
+            )
+            return None
+
+    manifest_contents = await asyncio.gather(
+        *(_fetch_manifest(fn) for fn in KNOWN_MANIFESTS)
+    )
+    frameworks: list[str] = []
+    for filename, content in zip(KNOWN_MANIFESTS, manifest_contents, strict=True):
+        if content:
+            frameworks.extend(parse_manifest(filename, content))
+
+    # Recent commits
+    try:
+        commits = await gh.get_recent_commits(
+            repo.full_name, limit=RECENT_COMMITS_PER_REPO
+        )
+        commit_messages = [c.message.split("\n", 1)[0] for c in commits]
+    except Exception as e:
+        log.warning("commits_fetch_failed", repo=repo.full_name, error=str(e))
+        commit_messages = []
+
+    return RepoSignal(
+        full_name=repo.full_name,
+        description=repo.description,
+        primary_language=repo.language,
+        languages=languages,
+        frameworks=sorted(set(frameworks)),
+        stars=repo.stargazers_count,
+        is_fork=repo.fork,
+        is_archived=repo.archived,
+        pushed_at=repo.pushed_at,
+        recent_commit_messages=commit_messages,
+        topics=repo.topics,
+    )
+
+
 async def collect_repo_signals(gh: GitHubClient, login: str) -> list[RepoSignal]:
-    """Fetch up to MAX_REPOS_TO_ANALYZE most recently active owned repos."""
+    """Fetch up to MAX_REPOS_TO_ANALYZE most recently active owned repos.
+
+    Repos are processed concurrently (bounded by `_SIGNAL_CONCURRENCY`) so the
+    ~11 GitHub calls per repo don't stack up serially. Order is preserved and
+    any repo that errors outright is dropped rather than failing the profile.
+    """
     repos = await gh.get_user_repos(login, max_repos=50, sort="pushed")
     repos = [r for r in repos if not r.fork and not r.archived]
     repos = repos[:MAX_REPOS_TO_ANALYZE]
 
+    sem = asyncio.Semaphore(_SIGNAL_CONCURRENCY)
+
+    async def _bounded(repo) -> RepoSignal:
+        async with sem:
+            return await _collect_one_repo(gh, repo)
+
+    results = await asyncio.gather(
+        *(_bounded(r) for r in repos), return_exceptions=True
+    )
     signals: list[RepoSignal] = []
-    for repo in repos:
-        # Languages
-        try:
-            languages = await gh.get_repo_languages(repo.full_name)
-        except Exception as e:
-            log.warning("languages_fetch_failed", repo=repo.full_name, error=str(e))
-            languages = {}
-
-        # Manifests
-        frameworks: list[str] = []
-        for filename in KNOWN_MANIFESTS:
-            try:
-                content = await gh.get_repo_file(repo.full_name, filename)
-            except NotFoundError:
-                content = None
-            except Exception as e:
-                log.warning(
-                    "manifest_fetch_failed",
-                    repo=repo.full_name, file=filename, error=str(e),
-                )
-                content = None
-            if content:
-                frameworks.extend(parse_manifest(filename, content))
-
-        # Recent commits
-        try:
-            commits = await gh.get_recent_commits(
-                repo.full_name, limit=RECENT_COMMITS_PER_REPO
+    for repo, result in zip(repos, results, strict=True):
+        if isinstance(result, RepoSignal):
+            signals.append(result)
+        else:
+            log.warning(
+                "repo_signal_failed", repo=repo.full_name, error=str(result)
             )
-            commit_messages = [c.message.split("\n", 1)[0] for c in commits]
-        except Exception as e:
-            log.warning("commits_fetch_failed", repo=repo.full_name, error=str(e))
-            commit_messages = []
-
-        signals.append(RepoSignal(
-            full_name=repo.full_name,
-            description=repo.description,
-            primary_language=repo.language,
-            languages=languages,
-            frameworks=sorted(set(frameworks)),
-            stars=repo.stargazers_count,
-            is_fork=repo.fork,
-            is_archived=repo.archived,
-            pushed_at=repo.pushed_at,
-            recent_commit_messages=commit_messages,
-            topics=repo.topics,
-        ))
-
     return signals
 
 

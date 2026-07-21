@@ -24,9 +24,12 @@ GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
 GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 GITHUB_USER_URL = "https://api.github.com/user"
 
-# Minimum scope for "log me in + read my profile". Future write features
-# (auto-post a pitch comment) would request `public_repo` additionally.
-DEFAULT_SCOPES = ["read:user"]
+# Scopes:
+#   read:user    — log me in + read my profile
+#   public_repo  — the Autonomous Pilot forks the target repo, pushes a branch,
+#                  and opens a PR on the user's behalf. Required for the pilot's
+#                  push/PR steps; without it those GitHub calls 403.
+DEFAULT_SCOPES = ["read:user", "public_repo"]
 
 
 class OAuthError(Exception):
