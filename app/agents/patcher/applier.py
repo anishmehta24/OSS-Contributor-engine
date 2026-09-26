@@ -73,7 +73,13 @@ def _apply_replace(full: Path, edit: CodeEdit) -> AppliedEdit:
             f"file not found: {edit.path}", path=edit.path,
         )
     try:
-        original = full.read_text(encoding="utf-8")
+        # Universal-newline read, so the LLM's `\n`-only search text still
+        # matches CRLF files (the prompt shows it the same normalized view).
+        with full.open("r", encoding="utf-8") as f:
+            original = f.read()
+            # "\n" / "\r\n" / "\r" for a consistent file, a tuple if mixed,
+            # None if the file has no line breaks at all.
+            eol = f.newlines
     except UnicodeDecodeError as e:
         raise EditApplyError(
             f"file not utf-8: {edit.path} ({e})", path=edit.path,
@@ -95,7 +101,11 @@ def _apply_replace(full: Path, edit: CodeEdit) -> AppliedEdit:
         )
 
     new_text = original.replace(edit.search, edit.replace, 1)
-    full.write_text(new_text, encoding="utf-8", newline="\n")
+    # Write back with the file's own line ending. Always writing "\n" turned
+    # every line of a CRLF file into a change, so a one-line fix became a
+    # whole-file rewrite in the captured diff (and in the pushed PR).
+    newline = eol if isinstance(eol, str) else "\n"
+    full.write_text(new_text, encoding="utf-8", newline=newline)
     return AppliedEdit(
         path=edit.path,
         explanation=edit.explanation,

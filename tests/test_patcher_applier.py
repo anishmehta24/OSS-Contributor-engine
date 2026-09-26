@@ -22,6 +22,9 @@ def _git_init(root: Path) -> None:
     """Bare-bones git repo so capture_diff has something to diff against."""
     for argv in (
         ["git", "init", "-q"],
+        # Store bytes verbatim, like a Linux host. A global autocrlf=true
+        # (Windows default) would normalize CRLF and hide line-ending diffs.
+        ["git", "config", "core.autocrlf", "false"],
         ["git", "-c", "user.email=t@t", "-c", "user.name=t",
          "add", "."],
         ["git", "-c", "user.email=t@t", "-c", "user.name=t",
@@ -155,6 +158,25 @@ def test_windows_backslashes_in_path_accepted(tmp_path):
     assert (tmp_path / "src/foo.py").read_text() == "y\n"
 
 
+@pytest.mark.unit
+def test_replace_preserves_crlf_line_endings(tmp_path):
+    (tmp_path / "win.py").write_bytes(b"a = 1\r\nb = 2\r\nc = 3\r\n")
+    # The LLM sees (and searches with) "\n"-normalized text.
+    apply_edits(tmp_path, [
+        CodeEdit(path="win.py", search="a = 1\nb = 2", replace="a = 1\nb = 42"),
+    ])
+    assert (tmp_path / "win.py").read_bytes() == b"a = 1\r\nb = 42\r\nc = 3\r\n"
+
+
+@pytest.mark.unit
+def test_replace_keeps_lf_line_endings(tmp_path):
+    (tmp_path / "unix.py").write_bytes(b"a = 1\nb = 2\n")
+    apply_edits(tmp_path, [
+        CodeEdit(path="unix.py", search="b = 2", replace="b = 42"),
+    ])
+    assert (tmp_path / "unix.py").read_bytes() == b"a = 1\nb = 42\n"
+
+
 # ---------------------------------------------------------------------------
 # capture_diff
 # ---------------------------------------------------------------------------
@@ -182,6 +204,24 @@ def test_capture_diff_includes_new_files(tmp_path):
     diff = capture_diff(tmp_path)
     assert "brand_new.py" in diff
     assert "+from new" in diff
+
+
+@pytest.mark.integration
+def test_capture_diff_crlf_edit_touches_only_changed_line(tmp_path):
+    lines = [f"v{i} = {i}" for i in range(20)]
+    (tmp_path / "win.py").write_bytes(("\r\n".join(lines) + "\r\n").encode())
+    _git_init(tmp_path)
+    apply_edits(tmp_path, [
+        CodeEdit(path="win.py", search="v10 = 10", replace="v10 = 100"),
+    ])
+    diff = capture_diff(tmp_path)
+    changed = [
+        ln for ln in diff.splitlines()
+        if ln[:1] in "+-" and not ln.startswith(("+++", "---"))
+    ]
+    assert len(changed) == 2, diff
+    assert changed[0].startswith("-v10 = 10")
+    assert changed[1].startswith("+v10 = 100")
 
 
 @pytest.mark.integration
